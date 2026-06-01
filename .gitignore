@@ -1,0 +1,19 @@
+# Courtly — .gitignore (essentials only; we'll add more as we build)
+
+# Secrets / environment
+.env
+.env.*
+!.env.example
+
+# macOS
+.DS_Store
+
+# .NET (backend/)
+[Bb]in/
+[Oo]bj/
+
+# Flutter / Dart (frontend/)
+.dart_tool/
+frontend/build/
+.flutter-plugins
+.flutter-plugins-dependencies
