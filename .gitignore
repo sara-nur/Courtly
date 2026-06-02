@@ -17,3 +17,10 @@
 frontend/build/
 .flutter-plugins
 .flutter-plugins-dependencies
+**/ephemeral/
+
+# Editors / IDE
+.vs/
+.idea/
+*.user
+*.iml

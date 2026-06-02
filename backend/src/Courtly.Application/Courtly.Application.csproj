@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Services (business logic), FluentValidation validators, ReservationStateMachine, RecommendationService. -->
+
+  <ItemGroup>
+    <ProjectReference Include="..\Courtly.Domain\Courtly.Domain.csproj" />
+    <ProjectReference Include="..\Courtly.Contracts\Courtly.Contracts.csproj" />
+    <ProjectReference Include="..\Courtly.Infrastructure\Courtly.Infrastructure.csproj" />
+  </ItemGroup>
+
+</Project>

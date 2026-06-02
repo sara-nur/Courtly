@@ -1,0 +1,5 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Entities, enums, Roles, custom exceptions. Depends on nothing (inner layer). -->
+
+</Project>

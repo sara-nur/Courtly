@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <!-- Controllers, middleware, SignalR hub, JWT, options, migrate+seed on startup. -->
+
+  <ItemGroup>
+    <ProjectReference Include="..\Courtly.Domain\Courtly.Domain.csproj" />
+    <ProjectReference Include="..\Courtly.Contracts\Courtly.Contracts.csproj" />
+    <ProjectReference Include="..\Courtly.Infrastructure\Courtly.Infrastructure.csproj" />
+    <ProjectReference Include="..\Courtly.Application\Courtly.Application.csproj" />
+  </ItemGroup>
+
+</Project>

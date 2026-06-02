@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- CourtlyDbContext, EF configs, migrations, seed, RabbitMQ publisher, Stripe client, SMTP sender. -->
+
+  <ItemGroup>
+    <ProjectReference Include="..\Courtly.Domain\Courtly.Domain.csproj" />
+    <ProjectReference Include="..\Courtly.Contracts\Courtly.Contracts.csproj" />
+  </ItemGroup>
+
+</Project>
