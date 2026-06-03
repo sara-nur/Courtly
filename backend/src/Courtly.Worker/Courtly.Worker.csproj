@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk.Worker">
+
+  <!-- RabbitMQ consumer, email sender, retry/backoff; calls API internal push endpoint. -->
+
+  <ItemGroup>
+    <!-- Worker SDK has no shared framework; the generic host types come from this package. -->
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Courtly.Domain\Courtly.Domain.csproj" />
+    <ProjectReference Include="..\Courtly.Contracts\Courtly.Contracts.csproj" />
+    <ProjectReference Include="..\Courtly.Infrastructure\Courtly.Infrastructure.csproj" />
+  </ItemGroup>
+
+</Project>

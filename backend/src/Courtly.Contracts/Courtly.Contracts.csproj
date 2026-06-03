@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- DTOs, PagedResult<T>, RabbitMQ message contracts (shared by Api + Worker). -->
+
+  <ItemGroup>
+    <ProjectReference Include="..\Courtly.Domain\Courtly.Domain.csproj" />
+  </ItemGroup>
+
+</Project>
