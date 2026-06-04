@@ -5,6 +5,8 @@
   <ItemGroup>
     <!-- Worker SDK has no shared framework; the generic host types come from this package. -->
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.0" />
+    <!-- RabbitMQ broker connection (feature 2 baseline; full consumer in feature 17). -->
+    <PackageReference Include="RabbitMQ.Client" Version="7.0.0" />
   </ItemGroup>
 
   <ItemGroup>

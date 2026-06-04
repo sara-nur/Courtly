@@ -22,12 +22,28 @@ docker-compose.yml   # (added in feature 2) postgres, rabbitmq, api, worker
 
 ## Running
 
-> Config lives in `.env` (copy from `.env.example`). DB name is `200067`.
+> Config lives in `.env` (copy from `.env.example` and fill in). DB name is `200067`.
+> Use a dedicated RabbitMQ user (not `guest` — it is loopback-only and is refused across the Docker network).
 
-**Backend**
+**Full stack (Docker)**
+```bash
+docker compose up --build      # postgres + rabbitmq + api + worker, all healthchecked
+```
+- API: http://localhost:5000 — health probe at http://localhost:5000/health
+- RabbitMQ management UI: http://localhost:15672 (log in with `RABBITMQ_USER`/`RABBITMQ_PASSWORD`)
+- `docker compose ps` should show all four services `healthy`.
+
+> **macOS note — port 5000.** macOS "AirPlay Receiver" listens on port 5000, which the API publishes.
+> If `docker compose up` fails with `bind: address already in use` on port 5000, turn it off:
+> **System Settings → General → AirDrop & Handoff → AirPlay Receiver → Off** (reversible), or remap the
+> API's published port in `docker-compose.yml`.
+
+**Backend (run directly, without Docker)**
 ```bash
 cd backend && dotnet build
-# docker compose up --build      # full stack — added in feature 2
+# Set the DB host / RABBITMQ_HOST to localhost in .env when running this way.
+dotnet run --project src/Courtly.Api      # API on http://localhost:5000
+dotnet run --project src/Courtly.Worker   # connects to RabbitMQ
 ```
 
 **Frontend**

@@ -1,0 +1,8 @@
+# Keep build context small and builds reproducible — let the SDK image restore/build from source.
+**/bin/
+**/obj/
+**/.vs/
+**/.idea/
+**/*.user
+Dockerfile
+.dockerignore

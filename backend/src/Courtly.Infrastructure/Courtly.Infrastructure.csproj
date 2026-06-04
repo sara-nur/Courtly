@@ -3,6 +3,12 @@
   <!-- CourtlyDbContext, EF configs, migrations, seed, RabbitMQ publisher, Stripe client, SMTP sender. -->
 
   <ItemGroup>
+    <!-- .env loader (feature 2) + typed-options binding/validation. -->
+    <PackageReference Include="DotNetEnv" Version="3.1.1" />
+    <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="10.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\Courtly.Domain\Courtly.Domain.csproj" />
     <ProjectReference Include="..\Courtly.Contracts\Courtly.Contracts.csproj" />
   </ItemGroup>
