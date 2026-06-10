@@ -1,5 +1,6 @@
 using Courtly.Domain.Entities;
 using Courtly.Domain.Enums;
+using Courtly.Infrastructure.Persistence.Seeding;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -15,5 +16,7 @@ public class AmenityConfiguration : IEntityTypeConfiguration<Amenity>
 
         builder.Property(x => x.IconKey)
             .HasMaxLength(100);
+
+        builder.HasData(SeedData.Amenities);
     }
 }

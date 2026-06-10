@@ -18,6 +18,14 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Feature 4: bundled seed images copied next to the assembly so the runtime seeder can read their bytes
+         (also flows to the API container and to projects that reference Infrastructure, e.g. tests). -->
+    <Content Include="Persistence/Seeding/SeedImages/**/*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\Courtly.Domain\Courtly.Domain.csproj" />
     <ProjectReference Include="..\Courtly.Contracts\Courtly.Contracts.csproj" />
   </ItemGroup>

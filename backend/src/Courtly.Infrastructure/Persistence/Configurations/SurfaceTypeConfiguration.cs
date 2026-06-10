@@ -1,5 +1,6 @@
 using Courtly.Domain.Entities;
 using Courtly.Domain.Enums;
+using Courtly.Infrastructure.Persistence.Seeding;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -15,5 +16,7 @@ public class SurfaceTypeConfiguration : IEntityTypeConfiguration<SurfaceType>
 
         builder.Property(x => x.Description)
             .HasMaxLength(500);
+
+        builder.HasData(SeedData.SurfaceTypes);
     }
 }
