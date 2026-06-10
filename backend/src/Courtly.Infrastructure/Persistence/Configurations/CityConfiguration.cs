@@ -1,5 +1,6 @@
 using Courtly.Domain.Entities;
 using Courtly.Domain.Enums;
+using Courtly.Infrastructure.Persistence.Seeding;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -17,5 +18,7 @@ public class CityConfiguration : IEntityTypeConfiguration<City>
             .WithMany(c => c.Cities)
             .HasForeignKey(x => x.CountryId)
             .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasData(SeedData.Cities);
     }
 }

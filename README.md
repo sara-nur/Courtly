@@ -56,9 +56,17 @@ flutter run -d emulator-5554 -t lib/main_client.dart --dart-define=API_BASE_URL=
 
 ## Test credentials
 
-_To be populated once seed data lands (feature 4)._
+Seeded on startup (feature 4). Every account uses the password **`test`**. See
+[`docs/seed-data.md`](docs/seed-data.md) for the full list of seeded data.
 
 | App | Username | Password | Role |
 |---|---|---|---|
-| Admin (desktop) | _tbd_ | _tbd_ | Admin |
-| Client (mobile) | _tbd_ | _tbd_ | User |
+| Admin (desktop) | `desktop` | `test` | Admin |
+| Staff (desktop) | `staff` | `test` | Staff |
+| Client (mobile) | `mobile` | `test` | User |
+| Client (mobile) | `emma` | `test` | User |
+
+> Seed data is created automatically: `docker compose up` applies migrations (which insert reference data +
+> roles) and then runs an idempotent runtime seeder (users, courts with images, time slots, sample
+> reservations/payments/reviews/news). Re-running never duplicates rows. To reset from scratch:
+> `docker compose down -v && docker compose up --build`.
