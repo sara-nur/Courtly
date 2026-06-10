@@ -1,5 +1,10 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!-- Entities, enums, Roles, custom exceptions. Depends on nothing (inner layer). -->
+  <!-- Entities, enums, Roles, custom exceptions. Depends on no other Courtly project (inner layer). -->
+
+  <ItemGroup>
+    <!-- AppUser extends IdentityUser<Guid>; this is the minimal Identity core type package (no EF here). -->
+    <PackageReference Include="Microsoft.Extensions.Identity.Stores" Version="10.0.8" />
+  </ItemGroup>
 
 </Project>
