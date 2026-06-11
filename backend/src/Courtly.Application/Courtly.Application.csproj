@@ -3,6 +3,11 @@
   <!-- Services (business logic), FluentValidation validators, ReservationStateMachine, RecommendationService. -->
 
   <ItemGroup>
+    <!-- Feature 5: TokenService uses System.IdentityModel.Tokens.Jwt + Microsoft.IdentityModel.Tokens. -->
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.8" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\Courtly.Domain\Courtly.Domain.csproj" />
     <ProjectReference Include="..\Courtly.Contracts\Courtly.Contracts.csproj" />
     <ProjectReference Include="..\Courtly.Infrastructure\Courtly.Infrastructure.csproj" />

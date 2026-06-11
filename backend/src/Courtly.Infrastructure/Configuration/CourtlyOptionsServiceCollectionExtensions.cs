@@ -35,7 +35,12 @@ public static class CourtlyOptionsServiceCollectionExtensions
                 o.Issuer = config["JWT_ISSUER"] ?? string.Empty;
                 o.Audience = config["JWT_AUDIENCE"] ?? string.Empty;
                 o.AccessMinutes = ParseInt(config["JWT_ACCESS_MINUTES"], 15);
-            });
+                o.RefreshDays = ParseInt(config["JWT_REFRESH_DAYS"], 7);
+                o.ResetTokenMinutes = ParseInt(config["JWT_RESET_TOKEN_MINUTES"], 60);
+            })
+            // Feature 5 brings auth online, so the signing key is now required (HMAC-SHA256 needs ≥256 bits).
+            .Validate(o => o.Key.Length >= 32, "JWT_KEY must be set and at least 32 characters.")
+            .ValidateOnStart();
 
         services.AddOptions<StripeOptions>()
             .Configure(o =>
