@@ -3,6 +3,12 @@
   <!-- Controllers, middleware, SignalR hub, JWT, options, migrate+seed on startup. -->
 
   <ItemGroup>
+    <!-- Feature 5: JWT bearer auth. Swashbuckle (Swagger UI) is added via `dotnet add package`. -->
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.8" />
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="10.2.1" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\Courtly.Domain\Courtly.Domain.csproj" />
     <ProjectReference Include="..\Courtly.Contracts\Courtly.Contracts.csproj" />
     <ProjectReference Include="..\Courtly.Infrastructure\Courtly.Infrastructure.csproj" />
