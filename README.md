@@ -1,6 +1,6 @@
 # Courtly
 
-Tennis-court reservation system — *Razvoj softvera II* seminar (Sara Nuredinovski, index IB200067, FIT "Džemal Bijedić", AY 2025/2026).
+Tennis-court reservation system
 
 A .NET 10 REST API + separate RabbitMQ worker over PostgreSQL, with a single Flutter project producing a **desktop admin app** and a **mobile client app**.
 
