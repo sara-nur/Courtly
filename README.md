@@ -50,9 +50,15 @@ dotnet run --project src/Courtly.Worker   # connects to RabbitMQ
 ```bash
 cd frontend
 flutter pub get
-flutter run -d macos -t lib/main_admin.dart     # desktop admin
-flutter run -d emulator-5554 -t lib/main_client.dart --dart-define=API_BASE_URL=http://10.0.2.2:5000   # mobile client
+flutter test                                     # widget tests
+# desktop admin — themed shell with top-nav (Dashboard · Reservations · Courts · Users · Reports)
+flutter run -d macos -t lib/main_admin.dart --dart-define=API_BASE_URL=http://localhost:5000
+# mobile client — bottom nav (Home / Search / Bookings / Notifications / Profile)
+flutter run -d emulator-5554 -t lib/main_client.dart --dart-define=API_BASE_URL=http://10.0.2.2:5000
 ```
+
+> `API_BASE_URL` is read once via `String.fromEnvironment('API_BASE_URL')`; if omitted it defaults to
+> `http://localhost:5000` (admin) / `http://10.0.2.2:5000` (mobile emulator).
 
 ## Test credentials
 
