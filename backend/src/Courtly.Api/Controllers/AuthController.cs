@@ -1,55 +1,63 @@
-using System.IdentityModel.Tokens.Jwt;
-using System.Security.Claims;
 using Courtly.Application.Abstractions;
-using Courtly.Application.Auth;
 using Courtly.Contracts.Auth;
+using Courtly.Contracts.Errors;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Courtly.Api.Controllers;
 
 /// <summary>
-/// Auth & identity endpoints (feature 5). Anonymous: register/login/refresh/forgot/reset.
-/// Authenticated: logout and the <c>/me</c> stub. Caller identity always comes from the JWT.
+/// Auth &amp; identity endpoints (feature 5). Anonymous: register/login/refresh/forgot/reset.
+/// Authenticated: logout and the <c>/me</c> stub. Caller identity always comes from the JWT
+/// (via <see cref="ICurrentUser"/>, never the body); the service throws on failure and the exception
+/// middleware returns a standardized <see cref="ErrorResponse"/>.
 /// </summary>
 [ApiController]
 [Route("api/auth")]
+[Produces("application/json")]
+[ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+[ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
 public sealed class AuthController : ControllerBase
 {
     private readonly IAuthService _auth;
+    private readonly ICurrentUser _currentUser;
 
-    public AuthController(IAuthService auth) => _auth = auth;
+    public AuthController(IAuthService auth, ICurrentUser currentUser)
+    {
+        _auth = auth;
+        _currentUser = currentUser;
+    }
 
     [AllowAnonymous]
     [HttpPost("register")]
-    public async Task<IActionResult> Register(RegisterRequest request, CancellationToken ct)
-        => Map(await _auth.RegisterAsync(request, ct));
+    public async Task<ActionResult<AuthResponse>> Register(RegisterRequest request, CancellationToken ct)
+        => Ok(await _auth.RegisterAsync(request, ct));
 
     [AllowAnonymous]
     [HttpPost("login")]
-    public async Task<IActionResult> Login(LoginRequest request, CancellationToken ct)
-        => Map(await _auth.LoginAsync(request, ct));
+    public async Task<ActionResult<AuthResponse>> Login(LoginRequest request, CancellationToken ct)
+        => Ok(await _auth.LoginAsync(request, ct));
 
     [AllowAnonymous]
     [HttpPost("refresh")]
-    public async Task<IActionResult> Refresh(RefreshRequest request, CancellationToken ct)
-        => Map(await _auth.RefreshAsync(request, ct));
+    public async Task<ActionResult<AuthResponse>> Refresh(RefreshRequest request, CancellationToken ct)
+        => Ok(await _auth.RefreshAsync(request, ct));
 
     [Authorize]
     [HttpPost("logout")]
     public async Task<IActionResult> Logout(LogoutRequest request, CancellationToken ct)
     {
         // Identity comes from the validated token, never the body (ownership-from-JWT rule).
-        var userId = GetUserId();
-        var jti = User.FindFirstValue(JwtRegisteredClaimNames.Jti);
-        var expiresAt = GetAccessTokenExpiry();
+        var userId = _currentUser.UserId;
+        var jti = _currentUser.Jti;
+        var expiresAt = _currentUser.AccessTokenExpiresAtUtc;
         if (userId is null || string.IsNullOrEmpty(jti) || expiresAt is null)
         {
             return Unauthorized();
         }
 
-        var result = await _auth.LogoutAsync(userId.Value, jti, expiresAt.Value, request.RefreshToken, ct);
-        return result.IsSuccess ? NoContent() : MapFailure(result);
+        await _auth.LogoutAsync(userId.Value, jti, expiresAt.Value, request.RefreshToken, ct);
+        return NoContent();
     }
 
     [AllowAnonymous]
@@ -65,16 +73,16 @@ public sealed class AuthController : ControllerBase
     [HttpPost("reset-password")]
     public async Task<IActionResult> ResetPassword(ResetPasswordRequest request, CancellationToken ct)
     {
-        var result = await _auth.ResetPasswordAsync(request, ct);
-        return result.IsSuccess ? Ok() : MapFailure(result);
+        await _auth.ResetPasswordAsync(request, ct);
+        return Ok();
     }
 
     /// <summary>Protected stub proving <c>[Authorize]</c> + the jti denylist work end-to-end.</summary>
     [Authorize]
     [HttpGet("me")]
-    public async Task<IActionResult> Me(CancellationToken ct)
+    public async Task<ActionResult<UserInfoResponse>> Me(CancellationToken ct)
     {
-        var userId = GetUserId();
+        var userId = _currentUser.UserId;
         if (userId is null)
         {
             return Unauthorized();
@@ -83,26 +91,4 @@ public sealed class AuthController : ControllerBase
         var user = await _auth.GetCurrentUserAsync(userId.Value, ct);
         return user is null ? Unauthorized() : Ok(user);
     }
-
-    private Guid? GetUserId() =>
-        Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var id) ? id : null;
-
-    private DateTime? GetAccessTokenExpiry() =>
-        long.TryParse(User.FindFirstValue("exp"), out var unixSeconds)
-            ? DateTimeOffset.FromUnixTimeSeconds(unixSeconds).UtcDateTime
-            : null;
-
-    private IActionResult Map(AuthResult<AuthResponse> result) =>
-        result.IsSuccess ? Ok(result.Value) : MapFailure(result);
-
-    // F6 replaces this ad-hoc mapping with ExceptionHandlingMiddleware + a standardized ErrorResponse.
-    private IActionResult MapFailure(AuthResult result) => result.Outcome switch
-    {
-        AuthOutcome.ValidationFailed => BadRequest(new { error = result.Error }),
-        AuthOutcome.InvalidCredentials => Unauthorized(new { error = result.Error }),
-        AuthOutcome.InvalidToken => Unauthorized(new { error = result.Error }),
-        AuthOutcome.Conflict => Conflict(new { error = result.Error }),
-        AuthOutcome.NotFound => NotFound(new { error = result.Error }),
-        _ => BadRequest(new { error = result.Error }),
-    };
 }

@@ -1,11 +1,12 @@
-using Courtly.Application.Auth;
+using Courtly.Application.Common.Exceptions;
 using Courtly.Contracts.Auth;
 using Microsoft.EntityFrameworkCore;
 using Xunit;
 
 namespace Courtly.Tests.Auth;
 
-/// <summary>Feature 5 DoD (auto): reset tokens are hashed, single-use, expiring, and non-enumerating.</summary>
+/// <summary>Feature 5 DoD (auto): reset tokens are hashed, single-use, expiring, and non-enumerating.
+/// Updated for feature 6 — an invalid/expired/used token surfaces as <see cref="UnauthorizedException"/>.</summary>
 public class PasswordResetTokenTests
 {
     private const string Email = "reset-me@example.com";
@@ -24,9 +25,8 @@ public class PasswordResetTokenTests
     {
         await using var h = await WithUserAsync();
 
-        var result = await h.Auth.ForgotPasswordAsync(new ForgotPasswordRequest(Email));
+        await h.Auth.ForgotPasswordAsync(new ForgotPasswordRequest(Email));
 
-        Assert.True(result.IsSuccess);
         Assert.Equal(1, h.Email.SendCount);
         Assert.Equal(Email, h.Email.LastEmail);
 
@@ -42,9 +42,9 @@ public class PasswordResetTokenTests
     {
         await using var h = await WithUserAsync();
 
-        var result = await h.Auth.ForgotPasswordAsync(new ForgotPasswordRequest("nobody@example.com"));
+        // Anti-enumeration: same outcome (no throw) as a known email.
+        await h.Auth.ForgotPasswordAsync(new ForgotPasswordRequest("nobody@example.com"));
 
-        Assert.True(result.IsSuccess); // anti-enumeration: same outcome as a known email
         Assert.Equal(0, h.Email.SendCount);
         Assert.False(await h.Db.PasswordResetTokens.AnyAsync());
     }
@@ -56,9 +56,8 @@ public class PasswordResetTokenTests
         await h.Auth.ForgotPasswordAsync(new ForgotPasswordRequest(Email));
         var raw = h.Email.LastToken!;
 
-        var result = await h.Auth.ResetPasswordAsync(new ResetPasswordRequest(Email, raw, NewPassword));
+        await h.Auth.ResetPasswordAsync(new ResetPasswordRequest(Email, raw, NewPassword));
 
-        Assert.True(result.IsSuccess);
         var user = await h.UserManager.FindByEmailAsync(Email);
         Assert.True(await h.UserManager.CheckPasswordAsync(user!, NewPassword));
         Assert.False(await h.UserManager.CheckPasswordAsync(user!, OldPassword));
@@ -66,20 +65,19 @@ public class PasswordResetTokenTests
     }
 
     [Fact]
-    public async Task Reset_reusing_used_token_fails()
+    public async Task Reset_reusing_used_token_throws()
     {
         await using var h = await WithUserAsync();
         await h.Auth.ForgotPasswordAsync(new ForgotPasswordRequest(Email));
         var raw = h.Email.LastToken!;
         await h.Auth.ResetPasswordAsync(new ResetPasswordRequest(Email, raw, NewPassword));
 
-        var second = await h.Auth.ResetPasswordAsync(new ResetPasswordRequest(Email, raw, "An0therPass!"));
-
-        Assert.Equal(AuthOutcome.InvalidToken, second.Outcome);
+        await Assert.ThrowsAsync<UnauthorizedException>(
+            () => h.Auth.ResetPasswordAsync(new ResetPasswordRequest(Email, raw, "An0therPass!")));
     }
 
     [Fact]
-    public async Task Reset_with_expired_token_fails()
+    public async Task Reset_with_expired_token_throws()
     {
         await using var h = await WithUserAsync();
         await h.Auth.ForgotPasswordAsync(new ForgotPasswordRequest(Email));
@@ -87,7 +85,7 @@ public class PasswordResetTokenTests
 
         h.Clock.UtcNow = h.Clock.UtcNow.AddMinutes(61); // past the 60-minute reset window
 
-        var result = await h.Auth.ResetPasswordAsync(new ResetPasswordRequest(Email, raw, NewPassword));
-        Assert.Equal(AuthOutcome.InvalidToken, result.Outcome);
+        await Assert.ThrowsAsync<UnauthorizedException>(
+            () => h.Auth.ResetPasswordAsync(new ResetPasswordRequest(Email, raw, NewPassword)));
     }
 }

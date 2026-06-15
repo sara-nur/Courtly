@@ -65,6 +65,7 @@ public static class CourtlyOptionsServiceCollectionExtensions
             {
                 o.BaseUrl = config["API_BASE_URL"] ?? string.Empty;
                 o.InternalPushKey = config["INTERNAL_PUSH_KEY"] ?? string.Empty;
+                o.AllowedCorsOrigins = ParseCsv(config["CORS_ALLOWED_ORIGINS"]);
             });
 
         return services;
@@ -72,4 +73,9 @@ public static class CourtlyOptionsServiceCollectionExtensions
 
     private static int ParseInt(string? value, int fallback) =>
         int.TryParse(value, out var parsed) ? parsed : fallback;
+
+    private static string[] ParseCsv(string? value) =>
+        string.IsNullOrWhiteSpace(value)
+            ? []
+            : value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 }

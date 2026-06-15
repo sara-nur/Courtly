@@ -6,6 +6,8 @@
     <!-- Feature 5: JWT bearer auth. Swashbuckle (Swagger UI) is added via `dotnet add package`. -->
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.8" />
     <PackageReference Include="Swashbuckle.AspNetCore" Version="10.2.1" />
+    <!-- Feature 6: AddValidatorsFromAssembly for the validation pipeline. -->
+    <PackageReference Include="FluentValidation.DependencyInjectionExtensions" Version="11.11.0" />
   </ItemGroup>
 
   <ItemGroup>
