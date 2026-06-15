@@ -5,6 +5,7 @@ using Courtly.Infrastructure.Configuration;
 using Courtly.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -84,6 +85,7 @@ internal sealed class AuthHarness : IAsyncDisposable
         var services = new ServiceCollection();
         services.AddSingleton<ILoggerFactory>(NullLoggerFactory.Instance);
         services.AddSingleton(typeof(ILogger<>), typeof(NullLogger<>));
+        services.AddMemoryCache();
         services.AddDbContext<CourtlyDbContext>(o => o.UseInMemoryDatabase($"auth-{Guid.NewGuid()}"));
         services
             .AddIdentityCore<AppUser>(o =>
@@ -104,7 +106,9 @@ internal sealed class AuthHarness : IAsyncDisposable
 
         var userManager = provider.GetRequiredService<UserManager<AppUser>>();
         var tokenService = new TokenService(Options.Create(jwt ?? DefaultJwt()), clock);
-        var auth = new AuthService(userManager, db, tokenService, email, clock, NullLogger<AuthService>.Instance);
+        var revokedTokenCache = new RevokedTokenCache(provider.GetRequiredService<IMemoryCache>(), db, clock);
+        var auth = new AuthService(
+            userManager, db, tokenService, email, clock, revokedTokenCache, NullLogger<AuthService>.Instance);
 
         return new AuthHarness(provider, db, userManager, clock, email, tokenService, auth);
     }

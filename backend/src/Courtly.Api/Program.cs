@@ -1,16 +1,25 @@
-// Courtly API host. Loads .env, binds typed options, registers the EF context + Identity + JWT auth,
-// applies migrations + seeds data on startup, and exposes the auth API (feature 5) behind Swagger.
+// Courtly API host. Loads .env, binds typed options, registers the EF context + Identity + JWT auth and the
+// feature-6 cross-cutting stack (exception middleware, validation pipeline, memory cache, CORS-once,
+// current-user accessor), applies migrations + seeds on startup, and exposes the auth API behind Swagger.
 using System.IdentityModel.Tokens.Jwt;
+using Courtly.Api.Identity;
+using Courtly.Api.Middleware;
+using Courtly.Api.Validation;
 using Courtly.Application.Abstractions;
+using Courtly.Application.Common.Validation;
 using Courtly.Application.DependencyInjection;
 using Courtly.Domain.Entities;
 using Courtly.Infrastructure.Configuration;
 using Courtly.Infrastructure.Persistence;
 using Courtly.Infrastructure.Persistence.Seeding;
+using FluentValidation;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.OpenApi;
+
+const string CorsPolicy = "CourtlyCors";
 
 EnvironmentLoader.Load();
 
@@ -25,7 +34,30 @@ builder.Services.AddCourtlySeeding();
 
 builder.Services.AddHealthChecks();
 
-builder.Services.AddControllers();
+// --- Feature 6 cross-cutting infrastructure ---
+builder.Services.AddMemoryCache();                          // hot reads / jti denylist cache (rubric §8.2)
+builder.Services.AddHttpContextAccessor();                  // backs ICurrentUser (rubric §3.4) — added once
+builder.Services.AddScoped<ICurrentUser, CurrentUser>();
+builder.Services.AddCourtlyCrossCutting();                  // IRevokedTokenCache
+builder.Services.AddValidatorsFromAssemblyContaining<RegisterRequestValidator>();
+
+// One CORS policy with an explicit origin allow-list from .env (rubric §3.4: configure once, never allow-any).
+var corsOrigins = (builder.Configuration["CORS_ALLOWED_ORIGINS"] ?? string.Empty)
+    .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+builder.Services.AddCors(options =>
+    options.AddPolicy(CorsPolicy, policy =>
+    {
+        if (corsOrigins.Length > 0)
+        {
+            policy.WithOrigins(corsOrigins).AllowAnyHeader().AllowAnyMethod().AllowCredentials();
+        }
+    }));
+
+// Controllers + the single validation gate. Suppress [ApiController]'s automatic 400 so every validation
+// error flows through ValidationActionFilter → ExceptionHandlingMiddleware → standardized ErrorResponse.
+builder.Services.AddControllers(options => options.Filters.Add<ValidationActionFilter>());
+builder.Services.Configure<ApiBehaviorOptions>(options => options.SuppressModelStateInvalidFilter = true);
+
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
 {
@@ -76,7 +108,7 @@ builder.Services
         options.TokenValidationParameters = tokenService.BuildValidationParameters();
         options.Events = new JwtBearerEvents
         {
-            // Reject access tokens whose jti was revoked at logout. F6 caches this denylist in IMemoryCache.
+            // Reject access tokens whose jti was revoked at logout. F6 serves this denylist from IMemoryCache.
             OnTokenValidated = async context =>
             {
                 var jti = context.Principal?.FindFirst(JwtRegisteredClaimNames.Jti)?.Value;
@@ -86,10 +118,9 @@ builder.Services
                     return;
                 }
 
-                // Resolve the scoped DbContext from the request scope — never capture it in this lambda.
-                var db = context.HttpContext.RequestServices.GetRequiredService<CourtlyDbContext>();
-                var isRevoked = await db.RevokedTokens.AsNoTracking().AnyAsync(r => r.Jti == jti);
-                if (isRevoked)
+                // Resolve the scoped cache from the request scope — never capture it in this lambda.
+                var revokedCache = context.HttpContext.RequestServices.GetRequiredService<IRevokedTokenCache>();
+                if (await revokedCache.IsRevokedAsync(jti, context.HttpContext.RequestAborted))
                 {
                     context.Fail("Token has been revoked.");
                 }
@@ -113,9 +144,13 @@ using (var scope = app.Services.CreateScope())
     await seeder.SeedAsync();
 }
 
+// Exception boundary first so it wraps the whole pipeline and never leaks a stack trace (rubric §3.4).
+app.UseMiddleware<ExceptionHandlingMiddleware>();
+
 app.UseSwagger();
 app.UseSwaggerUI();
 
+app.UseCors(CorsPolicy);
 app.UseAuthentication();
 app.UseAuthorization();
 
