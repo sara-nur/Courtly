@@ -18,6 +18,10 @@ dependencies:
   intl: ^0.19.0
   # Cached entity images in lists/tiles — F7
   cached_network_image: ^3.4.1
+  # HTTP client + interceptors (JWT attach, 401 refresh, error mapping) — F8
+  dio: ^5.7.0
+  # Secure token storage (OS keychain / credential store) — F8
+  flutter_secure_storage: ^9.2.2
 
 dev_dependencies:
   flutter_test:

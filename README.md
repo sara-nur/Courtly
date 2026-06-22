@@ -17,7 +17,7 @@ docker-compose.yml   # (added in feature 2) postgres, rabbitmq, api, worker
 ## Prerequisites
 
 - .NET 10 SDK (LTS)
-- Flutter (stable) with macOS desktop + Android toolchains enabled
+- Flutter (stable) with macOS desktop + Android (and optionally iOS/Xcode) toolchains enabled
 - Docker + Docker Compose (from feature 2 on)
 
 ## Running
@@ -51,14 +51,22 @@ dotnet run --project src/Courtly.Worker   # connects to RabbitMQ
 cd frontend
 flutter pub get
 flutter test                                     # widget tests
-# desktop admin — themed shell with top-nav (Dashboard · Reservations · Courts · Users · Reports)
+# desktop admin — sign in (Admin/Staff only) → themed shell with top-nav
+# (Dashboard · Reservations · Courts · Users · Reports). Needs the API running.
 flutter run -d macos -t lib/main_admin.dart --dart-define=API_BASE_URL=http://localhost:5000
-# mobile client — bottom nav (Home / Search / Bookings / Notifications / Profile)
-flutter run -d emulator-5554 -t lib/main_client.dart --dart-define=API_BASE_URL=http://10.0.2.2:5000
+# mobile client — bottom nav (Home / Search / Bookings / Notifications / Profile).
+# Placeholder shell for now; client login + screens land in feature 22.
+flutter run -d emulator-5554 -t lib/main_client.dart --dart-define=API_BASE_URL=http://10.0.2.2:5000   # Android emulator
+flutter run -d "iPhone 17 Pro"  -t lib/main_client.dart --dart-define=API_BASE_URL=http://localhost:5000  # iOS Simulator
 ```
 
 > `API_BASE_URL` is read once via `String.fromEnvironment('API_BASE_URL')`; if omitted it defaults to
 > `http://localhost:5000` (admin) / `http://10.0.2.2:5000` (mobile emulator).
+
+> **iOS Simulator (mobile client).** One-time: `xcodebuild -downloadPlatform iOS` to install the runtime, then
+> `open -a Simulator` to boot an iPhone before `flutter run`. The simulator reaches the host as `localhost`
+> (use `http://localhost:5000`, not `10.0.2.2`). The macOS admin app is sandboxed, so its network + keychain
+> entitlements are committed; no extra setup needed.
 
 ## Test credentials
 

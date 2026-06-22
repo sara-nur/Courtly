@@ -1,14 +1,19 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
+import '../../core/widgets/confirm_dialog.dart';
+import '../../features/auth/application/auth_controller.dart';
+import '../../features/auth/domain/auth_models.dart';
 import 'courtly_logo.dart';
 
 /// Admin desktop shell: a persistent top navigation bar (logo, primary tabs,
 /// global search, notifications bell, profile menu) wrapping the routed body.
-/// Layout mirrors `ui_design_and_scope.pdf` p.5.
-class AdminShell extends StatelessWidget {
+/// Layout mirrors `ui_design_and_scope.pdf` p.5. The profile menu shows the
+/// signed-in user and signs out via the real auth API (Feature 8).
+class AdminShell extends ConsumerWidget {
   const AdminShell({super.key, required this.navigationShell});
 
   /// Supplied by `StatefulShellRoute.indexedStack`; preserves each tab's state.
@@ -22,18 +27,34 @@ class AdminShell extends StatelessWidget {
     _AdminNavItem('Reports', Icons.bar_chart_outlined),
   ];
 
+  Future<void> _confirmSignOut(BuildContext context, WidgetRef ref) async {
+    final confirmed = await ConfirmDialog.show(
+      context,
+      title: 'Sign out',
+      message: 'Sign out of Courtly Admin?',
+      confirmLabel: 'Sign out',
+      icon: Icons.logout,
+    );
+    if (confirmed) {
+      await ref.read(authControllerProvider.notifier).logout();
+    }
+  }
+
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final user = ref.watch(authControllerProvider).user;
     return Scaffold(
       body: Column(
         children: [
           _TopNav(
             items: _items,
             currentIndex: navigationShell.currentIndex,
+            user: user,
             onSelect: (index) => navigationShell.goBranch(
               index,
               initialLocation: index == navigationShell.currentIndex,
             ),
+            onSignOut: () => _confirmSignOut(context, ref),
           ),
           Expanded(
             child: Align(
@@ -61,12 +82,16 @@ class _TopNav extends StatelessWidget {
   const _TopNav({
     required this.items,
     required this.currentIndex,
+    required this.user,
     required this.onSelect,
+    required this.onSignOut,
   });
 
   final List<_AdminNavItem> items;
   final int currentIndex;
+  final AuthUser? user;
   final ValueChanged<int> onSelect;
+  final VoidCallback onSignOut;
 
   @override
   Widget build(BuildContext context) {
@@ -97,7 +122,7 @@ class _TopNav extends StatelessWidget {
             color: AppColors.textSecondary,
           ),
           const SizedBox(width: AppSpacing.xs),
-          const _ProfileMenu(),
+          _ProfileMenu(user: user, onSignOut: onSignOut),
         ],
       ),
     );
@@ -168,37 +193,56 @@ class _GlobalSearch extends StatelessWidget {
 }
 
 class _ProfileMenu extends StatelessWidget {
-  const _ProfileMenu();
+  const _ProfileMenu({required this.user, required this.onSignOut});
+
+  final AuthUser? user;
+  final VoidCallback onSignOut;
+
+  static const String _signOut = 'sign-out';
 
   @override
   Widget build(BuildContext context) {
+    final name = user?.displayName ?? '—';
+    final role = user?.primaryRole ?? '';
     return PopupMenuButton<String>(
       tooltip: 'Account',
       position: PopupMenuPosition.under,
-      onSelected: (_) {},
+      onSelected: (value) {
+        if (value == _signOut) onSignOut();
+      },
       itemBuilder: (context) => const [
-        PopupMenuItem(value: 'profile', child: Text('Profile')),
-        PopupMenuItem(value: 'logout', child: Text('Sign out')),
+        PopupMenuItem(
+          value: _signOut,
+          child: ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: Icon(Icons.logout, size: 20),
+            title: Text('Sign out'),
+          ),
+        ),
       ],
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Column(
+          Column(
             crossAxisAlignment: CrossAxisAlignment.end,
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Text(
-                'Becky Doe',
-                style: TextStyle(
+                name,
+                style: const TextStyle(
                   fontWeight: FontWeight.w600,
                   fontSize: 13,
                   color: AppColors.textPrimary,
                 ),
               ),
-              Text(
-                'Super Admin',
-                style: TextStyle(fontSize: 11, color: AppColors.textMuted),
-              ),
+              if (role.isNotEmpty)
+                Text(
+                  role,
+                  style: const TextStyle(
+                    fontSize: 11,
+                    color: AppColors.textMuted,
+                  ),
+                ),
             ],
           ),
           const SizedBox(width: AppSpacing.xs),
