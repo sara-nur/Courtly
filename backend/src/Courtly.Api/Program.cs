@@ -94,6 +94,7 @@ builder.Services
 
 builder.Services.AddCourtlyAuth();
 builder.Services.AddCourtlyReferenceData();   // feature 9 reference-data CRUD services
+builder.Services.AddCourtlyCourtCatalog();    // feature 10 court catalog CRUD services
 
 builder.Services
     .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)

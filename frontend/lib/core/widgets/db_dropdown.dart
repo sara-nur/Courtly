@@ -50,6 +50,7 @@ class DbDropdown<T> extends StatelessWidget {
 
     return DropdownButtonFormField<T>(
       value: value,
+      isExpanded: true,
       items: [
         for (final item in items)
           DropdownMenuItem<T>(
