@@ -6,6 +6,7 @@ import '../../features/auth/application/auth_controller.dart';
 import '../../features/auth/domain/auth_models.dart';
 import '../../features/auth/presentation/auth_splash.dart';
 import '../../features/auth/presentation/login_screen.dart';
+import '../../features/court_catalog/presentation/courts_screen.dart';
 import '../../features/placeholders/feature_placeholder.dart';
 import '../../features/reference_data/presentation/settings_screen.dart';
 import '../shell/admin_shell.dart';
@@ -80,14 +81,7 @@ final adminRouterProvider = Provider<GoRouter>((ref) {
               icon: Icons.event_note_outlined,
             ),
           ),
-          _branch(
-            AdminRoutes.courts,
-            const FeaturePlaceholder(
-              title: 'Court Management',
-              subtitle: 'Monitor status, update pricing and maintenance.',
-              icon: Icons.sports_tennis_outlined,
-            ),
-          ),
+          _branch(AdminRoutes.courts, const CourtsScreen()),
           _branch(
             AdminRoutes.users,
             const FeaturePlaceholder(
