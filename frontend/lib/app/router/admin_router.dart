@@ -7,6 +7,7 @@ import '../../features/auth/domain/auth_models.dart';
 import '../../features/auth/presentation/auth_splash.dart';
 import '../../features/auth/presentation/login_screen.dart';
 import '../../features/placeholders/feature_placeholder.dart';
+import '../../features/reference_data/presentation/settings_screen.dart';
 import '../shell/admin_shell.dart';
 
 /// Admin route paths (single source — rubric §3.4: no scattered string literals).
@@ -18,6 +19,7 @@ abstract final class AdminRoutes {
   static const String courts = '/courts';
   static const String users = '/users';
   static const String reports = '/reports';
+  static const String settings = '/settings';
 }
 
 /// Builds the admin desktop router with an auth guard. The redirect reads the
@@ -102,6 +104,7 @@ final adminRouterProvider = Provider<GoRouter>((ref) {
               icon: Icons.bar_chart_outlined,
             ),
           ),
+          _branch(AdminRoutes.settings, const SettingsScreen()),
         ],
       ),
     ],
