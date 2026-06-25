@@ -52,7 +52,7 @@ void main() {
           courtCountryLookupProvider.overrideWith((ref) async => const []),
           courtFormLookupsProvider.overrideWith(
             (ref) async => const CourtFormLookups(
-                cities: [], surfaceTypes: [], courtTypes: []),
+                cities: [], surfaceTypes: [], courtTypes: [], amenities: []),
           ),
         ],
         child: const MaterialApp(home: Scaffold(body: CourtsScreen())),

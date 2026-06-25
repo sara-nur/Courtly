@@ -1,11 +1,12 @@
 namespace Courtly.Contracts.Court;
 
 /// <summary>
-/// Court-catalog contracts (feature 10). <see cref="CourtDto"/> carries the FK ids plus the resolved nav names
-/// (<c>CityName</c>/<c>CountryName</c>/<c>SurfaceTypeName</c>/<c>CourtTypeName</c>), all projected via JOINs on
-/// the read path (no extra query / N+1). <see cref="CourtDto.PrimaryImageUrl"/> is always <c>null</c> in F10:
-/// court images are stored as <c>bytea</c> with no public serving endpoint yet — the field exists so the contract
-/// stays stable when F11 adds image serving (it does NOT base64 bytes into the list payload). DTOs only on the wire.
+/// Court-catalog contracts (feature 10, extended in feature 11). <see cref="CourtDto"/> carries the FK ids plus the
+/// resolved nav names (<c>CityName</c>/<c>CountryName</c>/<c>SurfaceTypeName</c>/<c>CourtTypeName</c>), all projected
+/// via JOINs on the read path (no extra query / N+1). As of F11 <see cref="CourtDto.PrimaryImageUrl"/> is POPULATED
+/// to the relative <c>/api/images/{primaryImageId}</c> (or <c>null</c> when the court has no images) — the bytes are
+/// served by a dedicated public endpoint, never base64'd into the list payload. <see cref="CourtDto.Latitude"/>/
+/// <see cref="CourtDto.Longitude"/> carry the optional map location (both-or-neither). DTOs only on the wire.
 /// </summary>
 public sealed record CourtDto(
     long Id,
@@ -23,7 +24,9 @@ public sealed record CourtDto(
     bool IsActive,
     bool IsFeatured,
     decimal HourlyPrice,
-    string? PrimaryImageUrl);
+    string? PrimaryImageUrl,
+    double? Latitude,
+    double? Longitude);
 
 public sealed record CreateCourtRequest(
     string Name,
@@ -34,7 +37,9 @@ public sealed record CreateCourtRequest(
     bool IsIndoor,
     bool IsActive,
     bool IsFeatured,
-    decimal HourlyPrice);
+    decimal HourlyPrice,
+    double? Latitude = null,
+    double? Longitude = null);
 
 public sealed record UpdateCourtRequest(
     string Name,
@@ -45,7 +50,9 @@ public sealed record UpdateCourtRequest(
     bool IsIndoor,
     bool IsActive,
     bool IsFeatured,
-    decimal HourlyPrice);
+    decimal HourlyPrice,
+    double? Latitude = null,
+    double? Longitude = null);
 
 /// <summary>
 /// Query-string filters for the court list (feature 10), bound via <c>[FromQuery]</c>. Every filter is applied at

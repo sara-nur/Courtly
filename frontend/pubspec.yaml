@@ -22,6 +22,12 @@ dependencies:
   dio: ^5.7.0
   # Secure token storage (OS keychain / credential store) — F8
   flutter_secure_storage: ^9.2.2
+  # OSM map tiles for the court location picker — F11
+  flutter_map: ^7.0.2
+  # LatLng type for flutter_map — F11
+  latlong2: ^0.9.1
+  # desktop image file selection — F11
+  file_picker: ^8.1.4
 
 dev_dependencies:
   flutter_test:

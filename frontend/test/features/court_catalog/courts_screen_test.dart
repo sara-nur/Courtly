@@ -41,6 +41,7 @@ void main() {
         cities: [],
         surfaceTypes: [],
         courtTypes: [],
+        amenities: [],
       ),
     );
 

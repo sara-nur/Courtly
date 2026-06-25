@@ -1,13 +1,20 @@
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:latlong2/latlong.dart';
 
+import '../../../../core/env/app_config.dart';
 import '../../../../core/network/api_exception.dart';
+import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
+import '../../../../core/utils/image_urls.dart';
 import '../../../../core/widgets/app_back_button.dart';
 import '../../../../core/widgets/app_text_field.dart';
 import '../../../../core/widgets/async_value_view.dart';
 import '../../../../core/widgets/db_dropdown.dart';
 import '../../../../core/widgets/form_scaffold.dart';
+import '../../../../core/widgets/image_upload_field.dart';
+import '../../../../core/widgets/map_picker_modal.dart';
 import '../../../reference_data/domain/reference_models.dart';
 import '../../application/court_providers.dart';
 import '../../domain/court_models.dart';
@@ -18,6 +25,12 @@ import '../../domain/court_models.dart';
 /// **name**, never a textbox or a raw id) loaded together from
 /// [courtFormLookupsProvider]. Indoor/Active/Featured are [SwitchListTile]
 /// toggles (never text). The hourly price is validated to a number > 0.
+///
+/// Feature 11 adds three panes: a map-location picker ([MapPickerModal]) whose
+/// chosen lat/lng travel with the submit payload, an amenity multi-select
+/// ([FilterChip]s by name, never id) replaced wholesale on save, and an image
+/// pane ([ImageUploadField]) whose pending picks/removals/primary-change are
+/// reconciled against the backend in the submit sequence.
 ///
 /// On success the modal pops, a specific snackbar shows, and the list refreshes
 /// automatically (reload on create → newest-first; refresh on edit).
@@ -54,6 +67,25 @@ class _CourtFormState extends ConsumerState<_CourtForm> {
   late bool _isActive;
   late bool _isFeatured;
 
+  // Map location (both-or-neither; null = no pinned point).
+  double? _latitude;
+  double? _longitude;
+
+  // Amenity selection: presence of an amenityId = selected; value = highlighted.
+  final Map<int, bool> _amenityHighlighted = {};
+
+  // Image panes: server images, ids marked for deletion, fresh local picks, and
+  // the id the user chose as primary (deferred to submit).
+  List<CourtImage> _existingImages = [];
+  final List<int> _removedImageIds = [];
+  final List<PendingImage> _pendingImages = [];
+  int? _primaryImageId;
+
+  // Once the court row exists (loaded for edit, or created during this submit),
+  // its id is remembered here so a retry after a partial failure UPDATEs the same
+  // court instead of creating a duplicate.
+  int? _persistedCourtId;
+
   // Lower-case keys to match ApiException.fieldErrors (case-insensitive) and the
   // server-error lookups below — exactly like the City form's `_countryField`.
   static const String _nameField = 'name';
@@ -84,6 +116,41 @@ class _CourtFormState extends ConsumerState<_CourtForm> {
     _isIndoor = existing?.isIndoor ?? false;
     _isActive = existing?.isActive ?? true;
     _isFeatured = existing?.isFeatured ?? false;
+    _latitude = existing?.latitude;
+    _longitude = existing?.longitude;
+    _persistedCourtId = existing?.id;
+
+    if (_isEdit) {
+      // Load the court's existing amenities + images off the build frame.
+      Future.microtask(_loadSubResources);
+    }
+  }
+
+  /// On edit, fetch the court's current amenity links + images so the selectors
+  /// open pre-populated. Failures are non-fatal: the form still works, just
+  /// starting empty (the submit will then replace whatever the server has).
+  Future<void> _loadSubResources() async {
+    final repo = ref.read(courtRepositoryProvider);
+    final courtId = widget.existing!.id;
+    try {
+      final amenities = await repo.listAmenities(courtId);
+      final images = await repo.listImages(courtId);
+      if (!mounted) return;
+      setState(() {
+        _amenityHighlighted
+          ..clear()
+          ..addEntries(
+            amenities.map((a) => MapEntry(a.amenityId, a.isHighlighted)),
+          );
+        _existingImages = images;
+        _primaryImageId = images
+            .cast<CourtImage?>()
+            .firstWhere((i) => i!.isPrimary, orElse: () => null)
+            ?.id;
+      });
+    } catch (_) {
+      // Ignore — keep the form usable even if the sub-resources fail to load.
+    }
   }
 
   @override
@@ -93,6 +160,93 @@ class _CourtFormState extends ConsumerState<_CourtForm> {
     _priceController.dispose();
     super.dispose();
   }
+
+  Future<void> _pickLocation() async {
+    final initial = (_latitude != null && _longitude != null)
+        ? LatLng(_latitude!, _longitude!)
+        : null;
+    final result = await MapPickerModal.show(context, initial: initial);
+    if (result == null || !mounted) return;
+    setState(() {
+      _latitude = result.latitude;
+      _longitude = result.longitude;
+    });
+  }
+
+  void _clearLocation() {
+    setState(() {
+      _latitude = null;
+      _longitude = null;
+    });
+  }
+
+  void _toggleAmenity(int amenityId, bool selected) {
+    setState(() {
+      if (selected) {
+        _amenityHighlighted[amenityId] = false;
+      } else {
+        _amenityHighlighted.remove(amenityId);
+      }
+    });
+  }
+
+  void _toggleHighlighted(int amenityId) {
+    setState(() {
+      _amenityHighlighted[amenityId] =
+          !(_amenityHighlighted[amenityId] ?? false);
+    });
+  }
+
+  Future<void> _pickImages() async {
+    final FilePickerResult? result;
+    try {
+      result = await FilePicker.platform.pickFiles(
+        type: FileType.image,
+        allowMultiple: true,
+        withData: true,
+      );
+    } catch (e) {
+      // Surface a reason instead of silently doing nothing (e.g. a sandbox /
+      // entitlement denial on desktop).
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not open the file picker: $e')),
+      );
+      return;
+    }
+    if (result == null || !mounted) return;
+    final picks = <PendingImage>[];
+    for (final file in result.files) {
+      final bytes = file.bytes;
+      if (bytes == null) continue;
+      picks.add(PendingImage(bytes: bytes, filename: file.name));
+    }
+    if (picks.isEmpty) return;
+    setState(() => _pendingImages.addAll(picks));
+  }
+
+  void _removeExistingImage(int imageId) {
+    setState(() {
+      _removedImageIds.add(imageId);
+      _existingImages =
+          _existingImages.where((i) => i.id != imageId).toList(growable: false);
+      if (_primaryImageId == imageId) _primaryImageId = null;
+    });
+  }
+
+  void _removePendingImage(int index) {
+    setState(() => _pendingImages.removeAt(index));
+  }
+
+  void _setPrimaryImage(int imageId) {
+    setState(() => _primaryImageId = imageId);
+  }
+
+  /// Builds the amenity payload (the whole desired set — the backend replaces).
+  List<({int amenityId, String? note, bool isHighlighted})> _amenityItems() =>
+      _amenityHighlighted.entries
+          .map((e) => (amenityId: e.key, note: null, isHighlighted: e.value))
+          .toList(growable: false);
 
   Future<void> _submit() async {
     setState(_serverErrors.clear);
@@ -112,15 +266,52 @@ class _CourtFormState extends ConsumerState<_CourtForm> {
       'isActive': _isActive,
       'isFeatured': _isFeatured,
       'hourlyPrice': double.parse(_priceController.text.trim()),
+      'latitude': _latitude,
+      'longitude': _longitude,
     };
 
     try {
-      if (_isEdit) {
-        await repo.update(widget.existing!.id, payload);
+      // 1) Create or update the court (now incl. lat/lng) → obtain its id. Once a
+      //    court exists, remember its id so a retry after a later-step failure
+      //    UPDATEs it instead of creating a duplicate court.
+      final int courtId;
+      if (_persistedCourtId != null) {
+        await repo.update(_persistedCourtId!, payload);
+        courtId = _persistedCourtId!;
       } else {
-        await repo.create(payload);
+        final created = await repo.create(payload);
+        courtId = created.id;
+        _persistedCourtId = courtId;
       }
 
+      // 2) Replace the court's amenity set with the chosen one (idempotent — the
+      //    backend replaces the whole set).
+      await repo.setAmenities(courtId, _amenityItems());
+
+      // 3) Delete the images the user removed, dropping each id as it succeeds so
+      //    a retry never re-deletes an already-gone image (which would 404).
+      for (final imageId in List<int>.of(_removedImageIds)) {
+        await repo.deleteImage(courtId, imageId);
+        _removedImageIds.remove(imageId);
+      }
+
+      // 4) Upload each fresh pick, dropping it as it succeeds so a retry never
+      //    re-uploads a duplicate. The backend auto-marks the first image of an
+      //    image-less court as primary, so no client-side primary flag is needed.
+      for (final pick in List<PendingImage>.of(_pendingImages)) {
+        await repo.uploadImage(courtId, bytes: pick.bytes, filename: pick.filename);
+        _pendingImages.remove(pick);
+      }
+
+      // 5) Apply a primary change among the surviving existing images.
+      if (_primaryImageId != null &&
+          _existingImages.any(
+            (i) => i.id == _primaryImageId && !i.isPrimary,
+          )) {
+        await repo.setPrimaryImage(courtId, _primaryImageId!);
+      }
+
+      // 6) Refresh the grid (reload on create → newest-first; refresh on edit).
       final controller = ref.read(courtListControllerProvider.notifier);
       if (_isEdit) {
         await controller.refresh();
@@ -220,6 +411,7 @@ class _CourtFormState extends ConsumerState<_CourtForm> {
   @override
   Widget build(BuildContext context) {
     final lookups = ref.watch(courtFormLookupsProvider);
+    final baseUrl = ref.watch(appConfigProvider).apiBaseUrl;
 
     return Dialog(
       child: Form(
@@ -295,6 +487,14 @@ class _CourtFormState extends ConsumerState<_CourtForm> {
                     }),
                   ),
                   const SizedBox(height: AppSpacing.md),
+                  _LocationField(
+                    latitude: _latitude,
+                    longitude: _longitude,
+                    enabled: !_submitting,
+                    onPick: _pickLocation,
+                    onClear: _clearLocation,
+                  ),
+                  const SizedBox(height: AppSpacing.md),
                   DbDropdown<SurfaceType>(
                     value: _selected(
                         data.surfaceTypes, _surfaceTypeId, (s) => s.id),
@@ -324,6 +524,14 @@ class _CourtFormState extends ConsumerState<_CourtForm> {
                       _serverErrors.remove(_courtTypeField);
                     }),
                   ),
+                  const SizedBox(height: AppSpacing.md),
+                  _AmenitySelector(
+                    amenities: data.amenities,
+                    highlighted: _amenityHighlighted,
+                    enabled: !_submitting,
+                    onToggle: _toggleAmenity,
+                    onToggleHighlighted: _toggleHighlighted,
+                  ),
                 ],
               ),
             ),
@@ -338,6 +546,23 @@ class _CourtFormState extends ConsumerState<_CourtForm> {
               autovalidateMode: AutovalidateMode.onUserInteraction,
               onChanged: (_) => _clearServerError(_priceField),
               validator: _validatePrice,
+            ),
+            ImageUploadField(
+              existing: [
+                for (final image in _existingImages)
+                  ExistingCourtImage(
+                    imageId: image.id,
+                    absoluteUrl: absoluteImageUrl(baseUrl, image.url),
+                    isPrimary: image.id == _primaryImageId,
+                    caption: image.caption,
+                  ),
+              ],
+              pending: _pendingImages,
+              enabled: !_submitting,
+              onPickFiles: _pickImages,
+              onRemoveExisting: _removeExistingImage,
+              onRemovePending: _removePendingImage,
+              onSetPrimary: _setPrimaryImage,
             ),
             SwitchListTile.adaptive(
               value: _isIndoor,
@@ -363,6 +588,163 @@ class _CourtFormState extends ConsumerState<_CourtForm> {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// The map-location row: a "Pick location on map" button and, once a point is
+/// set, a read-only "Location: lat, lng" line with a Clear button. The coords
+/// are display-only here — they're never an editable numeric textbox (rubric).
+class _LocationField extends StatelessWidget {
+  const _LocationField({
+    required this.latitude,
+    required this.longitude,
+    required this.enabled,
+    required this.onPick,
+    required this.onClear,
+  });
+
+  final double? latitude;
+  final double? longitude;
+  final bool enabled;
+  final VoidCallback onPick;
+  final VoidCallback onClear;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final hasPoint = latitude != null && longitude != null;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        OutlinedButton.icon(
+          onPressed: enabled ? onPick : null,
+          icon: const Icon(Icons.map_outlined, size: 18),
+          label: const Text('Pick location on map'),
+        ),
+        if (hasPoint) ...[
+          const SizedBox(height: AppSpacing.xs),
+          Row(
+            children: [
+              const Icon(Icons.place_outlined,
+                  size: 18, color: AppColors.textSecondary),
+              const SizedBox(width: AppSpacing.xs),
+              Expanded(
+                child: Text(
+                  'Location: ${latitude!.toStringAsFixed(6)}, '
+                  '${longitude!.toStringAsFixed(6)}',
+                  style: theme.textTheme.bodyMedium,
+                ),
+              ),
+              TextButton(
+                onPressed: enabled ? onClear : null,
+                child: const Text('Clear'),
+              ),
+            ],
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+/// The amenity multi-select: a [Wrap] of [FilterChip]s (one per amenity, by
+/// name) plus a star toggle on each selected chip to flip its highlighted flag.
+/// Never shows a raw amenity id.
+class _AmenitySelector extends StatelessWidget {
+  const _AmenitySelector({
+    required this.amenities,
+    required this.highlighted,
+    required this.enabled,
+    required this.onToggle,
+    required this.onToggleHighlighted,
+  });
+
+  final List<Amenity> amenities;
+  final Map<int, bool> highlighted;
+  final bool enabled;
+  final void Function(int amenityId, bool selected) onToggle;
+  final void Function(int amenityId) onToggleHighlighted;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          'Amenities',
+          style: theme.textTheme.titleSmall
+              ?.copyWith(fontWeight: FontWeight.w600),
+        ),
+        const SizedBox(height: AppSpacing.xxs),
+        if (amenities.isEmpty)
+          Text(
+            'No amenities available.',
+            style: theme.textTheme.bodySmall
+                ?.copyWith(color: AppColors.textMuted),
+          )
+        else
+          Wrap(
+            spacing: AppSpacing.xs,
+            runSpacing: AppSpacing.xs,
+            children: [
+              for (final amenity in amenities)
+                _AmenityChip(
+                  amenity: amenity,
+                  selected: highlighted.containsKey(amenity.id),
+                  isHighlighted: highlighted[amenity.id] ?? false,
+                  enabled: enabled,
+                  onToggle: (on) => onToggle(amenity.id, on),
+                  onToggleHighlighted: () => onToggleHighlighted(amenity.id),
+                ),
+            ],
+          ),
+      ],
+    );
+  }
+}
+
+/// A single amenity [FilterChip] with an inline star toggle (shown only when the
+/// chip is selected) to mark the amenity highlighted.
+class _AmenityChip extends StatelessWidget {
+  const _AmenityChip({
+    required this.amenity,
+    required this.selected,
+    required this.isHighlighted,
+    required this.enabled,
+    required this.onToggle,
+    required this.onToggleHighlighted,
+  });
+
+  final Amenity amenity;
+  final bool selected;
+  final bool isHighlighted;
+  final bool enabled;
+  final ValueChanged<bool> onToggle;
+  final VoidCallback onToggleHighlighted;
+
+  @override
+  Widget build(BuildContext context) {
+    // The chip BODY toggles selection; the trailing delete-slot is a separate hit
+    // target, so it carries the "feature" (highlight) star — a star nested inside
+    // the label would be swallowed by the chip's own onSelected tap.
+    return FilterChip(
+      label: Text(amenity.name),
+      selected: selected,
+      onSelected: enabled ? onToggle : null,
+      deleteIcon: Icon(
+        isHighlighted ? Icons.star : Icons.star_border,
+        size: 18,
+        color: isHighlighted ? AppColors.warning : AppColors.textMuted,
+      ),
+      onDeleted: selected && enabled ? onToggleHighlighted : null,
+      deleteButtonTooltipMessage:
+          isHighlighted ? 'Featured — tap to unfeature' : 'Tap to feature',
     );
   }
 }

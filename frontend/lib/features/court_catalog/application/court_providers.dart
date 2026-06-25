@@ -231,24 +231,36 @@ final courtTypeLookupProvider = FutureProvider<List<CourtType>>(
       .items,
 );
 
+/// Amenities for the court form's amenity multi-select (F11). Mirrors the other
+/// lookups — one large page via the existing reference list endpoint.
+final amenityLookupProvider = FutureProvider<List<Amenity>>(
+  (ref) async => (await ref
+          .watch(referenceRepositoryProvider)
+          .listAmenities(pageSize: kLookupPageSize))
+      .items,
+);
+
 /// Countries for the country filter (reuses the cached `/lookup` endpoint).
 final courtCountryLookupProvider = FutureProvider<List<Country>>(
   (ref) => ref.watch(referenceRepositoryProvider).lookupCountries(),
 );
 
-/// The three FK lookups the create/edit form needs, loaded **together** with
+/// The FK lookups the create/edit form needs, loaded **together** with
 /// [Future.wait] (recon — independent loads run concurrently). Feeds the City,
-/// SurfaceType and CourtType dropdowns from a single [AsyncValue].
+/// SurfaceType and CourtType dropdowns plus the F11 amenity multi-select from a
+/// single [AsyncValue].
 class CourtFormLookups {
   const CourtFormLookups({
     required this.cities,
     required this.surfaceTypes,
     required this.courtTypes,
+    required this.amenities,
   });
 
   final List<City> cities;
   final List<SurfaceType> surfaceTypes;
   final List<CourtType> courtTypes;
+  final List<Amenity> amenities;
 }
 
 final courtFormLookupsProvider = FutureProvider<CourtFormLookups>((ref) async {
@@ -257,10 +269,12 @@ final courtFormLookupsProvider = FutureProvider<CourtFormLookups>((ref) async {
     repo.listCities(pageSize: kLookupPageSize),
     repo.listSurfaceTypes(pageSize: kLookupPageSize),
     repo.listCourtTypes(pageSize: kLookupPageSize),
+    repo.listAmenities(pageSize: kLookupPageSize),
   ]);
   return CourtFormLookups(
     cities: (results[0] as PagedResult<City>).items,
     surfaceTypes: (results[1] as PagedResult<SurfaceType>).items,
     courtTypes: (results[2] as PagedResult<CourtType>).items,
+    amenities: (results[3] as PagedResult<Amenity>).items,
   );
 });

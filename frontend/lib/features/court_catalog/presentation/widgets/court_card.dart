@@ -1,9 +1,12 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/env/app_config.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/utils/formatters.dart';
+import '../../../../core/utils/image_urls.dart';
 import '../../../../core/widgets/status_badge.dart';
 import '../../domain/court_models.dart';
 
@@ -116,10 +119,14 @@ class CourtCard extends StatelessWidget {
   }
 }
 
-/// The card's header image: a seeded network image, or a muted placeholder icon
-/// when no URL is present / it fails to load. Constrained to a fixed banner so
-/// the image never exceeds the card body (rubric — image not dominating).
-class _CourtImage extends StatelessWidget {
+/// The card's header image: the court's primary image, or a muted placeholder
+/// icon when no URL is present / it fails to load. Constrained to a fixed banner
+/// so the image never exceeds the card body (rubric — image not dominating).
+///
+/// [imageUrl] arrives RELATIVE (`/api/images/{id}`); the absolute URL is composed
+/// here from the configured base URL ([appConfigProvider]) so no host is ever
+/// hardcoded.
+class _CourtImage extends ConsumerWidget {
   const _CourtImage({this.imageUrl});
 
   final String? imageUrl;
@@ -127,9 +134,12 @@ class _CourtImage extends StatelessWidget {
   static const double _height = 140;
 
   @override
-  Widget build(BuildContext context) {
-    final url = imageUrl;
-    final hasImage = url != null && url.isNotEmpty;
+  Widget build(BuildContext context, WidgetRef ref) {
+    final relative = imageUrl;
+    final url = (relative == null || relative.isEmpty)
+        ? ''
+        : absoluteImageUrl(ref.watch(appConfigProvider).apiBaseUrl, relative);
+    final hasImage = url.isNotEmpty;
 
     return SizedBox(
       height: _height,
