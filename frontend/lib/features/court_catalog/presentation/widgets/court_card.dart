@@ -28,12 +28,14 @@ class CourtCard extends StatelessWidget {
     required this.onEdit,
     required this.onDelete,
     required this.onManageMaintenance,
+    required this.onManageSlots,
   });
 
   final Court court;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
   final VoidCallback onManageMaintenance;
+  final VoidCallback onManageSlots;
 
   @override
   Widget build(BuildContext context) {
@@ -103,6 +105,12 @@ class CourtCard extends StatelessWidget {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.end,
                   children: [
+                    IconButton(
+                      tooltip: 'Slots & availability',
+                      icon: const Icon(Icons.event_available_outlined),
+                      color: AppColors.textSecondary,
+                      onPressed: onManageSlots,
+                    ),
                     IconButton(
                       tooltip: 'Maintenance & status',
                       icon: const Icon(Icons.build_outlined),

@@ -247,4 +247,64 @@ class CourtApi {
 
   Future<CourtMaintenanceLog> cancelMaintenance(int courtId, int logId) =>
       _transition(courtId, logId, 'cancel');
+
+  // --- Court time slots (F13) ------------------------------------------------
+  //
+  //   POST   /api/courts/{id}/slots/generate     ({fromDate, toDate, openHour, closeHour, slotMinutes, eveningPeakMultiplier?})
+  //   GET    /api/courts/{id}/slots/availability ?date=yyyy-MM-dd   → DayAvailability
+  //   DELETE /api/courts/{id}/slots/{slotId}                        → remove one slot
+  //   DELETE /api/courts/{id}/slots             ?date=yyyy-MM-dd    → remove a day → RemoveSlotsResult
+
+  /// Wire format for a `DateOnly` query/body value (`yyyy-MM-dd`, date part only).
+  static String _dateOnly(DateTime date) =>
+      '${date.year.toString().padLeft(4, '0')}-'
+      '${date.month.toString().padLeft(2, '0')}-'
+      '${date.day.toString().padLeft(2, '0')}';
+
+  Future<GenerateSlotsResult> generateSlots(
+    int courtId, {
+    required DateTime fromDate,
+    required DateTime toDate,
+    required int openHour,
+    required int closeHour,
+    required int slotMinutes,
+    double? eveningPeakMultiplier,
+  }) async {
+    final response = await _dio.post<dynamic>(
+      '$_courts/$courtId/slots/generate',
+      data: <String, dynamic>{
+        'fromDate': _dateOnly(fromDate),
+        'toDate': _dateOnly(toDate),
+        'openHour': openHour,
+        'closeHour': closeHour,
+        'slotMinutes': slotMinutes,
+        if (eveningPeakMultiplier != null)
+          'eveningPeakMultiplier': eveningPeakMultiplier,
+      },
+    );
+    return GenerateSlotsResult.fromJson(
+        (response.data as Map).cast<String, dynamic>());
+  }
+
+  Future<DayAvailability> availability(int courtId, DateTime date) async {
+    final response = await _dio.get<dynamic>(
+      '$_courts/$courtId/slots/availability',
+      queryParameters: {'date': _dateOnly(date)},
+    );
+    return DayAvailability.fromJson(
+        (response.data as Map).cast<String, dynamic>());
+  }
+
+  Future<void> removeSlot(int courtId, int slotId) async {
+    await _dio.delete<dynamic>('$_courts/$courtId/slots/$slotId');
+  }
+
+  Future<RemoveSlotsResult> removeDaySlots(int courtId, DateTime date) async {
+    final response = await _dio.delete<dynamic>(
+      '$_courts/$courtId/slots',
+      queryParameters: {'date': _dateOnly(date)},
+    );
+    return RemoveSlotsResult.fromJson(
+        (response.data as Map).cast<String, dynamic>());
+  }
 }

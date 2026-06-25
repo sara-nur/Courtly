@@ -218,6 +218,17 @@ final maintenanceHistoryProvider =
   return result.items;
 });
 
+/// One day's slot availability for a court (F13), keyed by court + (date-only)
+/// day. The slots modal watches this for the selected date; after a generate or
+/// remove, invalidate `slotAvailabilityProvider((courtId: id, date: day))` to
+/// refresh the day without a manual reload. Callers must pass a date-only
+/// [DateTime] (`DateTime(y, m, d)`) so the family key stays stable.
+final slotAvailabilityProvider =
+    FutureProvider.family<DayAvailability, ({int courtId, DateTime date})>(
+  (ref, query) =>
+      ref.watch(courtRepositoryProvider).availability(query.courtId, query.date),
+);
+
 // --- FK dropdown lookups -----------------------------------------------------
 //
 // No dedicated lookup endpoints exist for cities/surface-types/court-types
