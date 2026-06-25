@@ -16,6 +16,7 @@ public sealed class CreateCourtRequestValidator : AbstractValidator<CreateCourtR
     {
         this.ApplyCourtRules(
             r => r.Name, r => r.Description, r => r.CityId, r => r.SurfaceTypeId, r => r.CourtTypeId, r => r.HourlyPrice);
+        this.ApplyLocationRules(r => r.Latitude, r => r.Longitude);
     }
 }
 
@@ -25,6 +26,7 @@ public sealed class UpdateCourtRequestValidator : AbstractValidator<UpdateCourtR
     {
         this.ApplyCourtRules(
             r => r.Name, r => r.Description, r => r.CityId, r => r.SurfaceTypeId, r => r.CourtTypeId, r => r.HourlyPrice);
+        this.ApplyLocationRules(r => r.Latitude, r => r.Longitude);
     }
 }
 
@@ -63,5 +65,30 @@ internal static class CourtValidationRules
         validator.RuleFor(hourlyPrice)
             .GreaterThan(0).WithMessage("Hourly price must be greater than 0.")
             .LessThanOrEqualTo(MaxHourlyPrice).WithMessage($"Hourly price must be at most {MaxHourlyPrice:0}.");
+    }
+
+    /// <summary>The optional map location rules shared by Create/Update: latitude and longitude are both-or-neither
+    /// (the map picker either sets both or clears both), latitude is in [-90, 90], and longitude is in [-180, 180].
+    /// Messages are user-facing so the Flutter client can render them under the map field.</summary>
+    public static void ApplyLocationRules<T>(
+        this AbstractValidator<T> validator,
+        System.Linq.Expressions.Expression<Func<T, double?>> latitude,
+        System.Linq.Expressions.Expression<Func<T, double?>> longitude)
+    {
+        var latGetter = latitude.Compile();
+        var lngGetter = longitude.Compile();
+
+        // Both-or-neither: if exactly one coordinate is set, the location is incomplete — reject it on both fields.
+        validator.RuleFor(latitude)
+            .Must((model, _) => latGetter(model).HasValue == lngGetter(model).HasValue)
+            .WithMessage("Latitude and longitude must be set together.");
+
+        validator.RuleFor(latitude)
+            .Must(lat => !lat.HasValue || (lat.Value >= -90d && lat.Value <= 90d))
+            .WithMessage("Latitude must be between -90 and 90.");
+
+        validator.RuleFor(longitude)
+            .Must(lng => !lng.HasValue || (lng.Value >= -180d && lng.Value <= 180d))
+            .WithMessage("Longitude must be between -180 and 180.");
     }
 }

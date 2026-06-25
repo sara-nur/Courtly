@@ -1,3 +1,5 @@
+import 'package:courtly/core/app_flavor.dart';
+import 'package:courtly/core/env/app_config.dart';
 import 'package:courtly/core/theme/app_theme.dart';
 import 'package:courtly/core/widgets/db_dropdown.dart';
 import 'package:courtly/features/court_catalog/application/court_providers.dart';
@@ -14,16 +16,19 @@ void main() {
   const lyon = City(id: 2, name: 'Lyon', countryId: 1, countryName: 'France');
   const clay = SurfaceType(id: 1, name: 'Clay');
   const indoorType = CourtType(id: 1, name: 'Indoor');
+  const lockers = Amenity(id: 1, name: 'Lockers');
 
   CourtFormLookups lookups({
     List<City> cities = const [paris, lyon],
     List<SurfaceType> surfaceTypes = const [clay],
     List<CourtType> courtTypes = const [indoorType],
+    List<Amenity> amenities = const [lockers],
   }) =>
       CourtFormLookups(
         cities: cities,
         surfaceTypes: surfaceTypes,
         courtTypes: courtTypes,
+        amenities: amenities,
       );
 
   Future<void> pumpCourtForm(
@@ -31,16 +36,25 @@ void main() {
     required CourtFormLookups data,
     CourtRepository? repo,
   }) async {
-    // The court form is a tall dialog (name, description, 3 FK dropdowns, price,
-    // three toggles + actions). Give the test a viewport tall enough that the
+    // The court form is a tall dialog (name, description, 3 FK dropdowns, the
+    // map-location picker, amenity multi-select, price, image pane + three
+    // toggles + actions). Give the test a viewport tall enough that the
     // "Create" action is on-screen and hit-testable.
-    tester.view.physicalSize = const Size(1200, 1600);
+    tester.view.physicalSize = const Size(1200, 2400);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          // The form reads the base URL for image thumbnails on every build;
+          // appConfigProvider throws unless overridden, so seed a test value.
+          appConfigProvider.overrideWithValue(
+            const AppConfig(
+              flavor: AppFlavor.admin,
+              apiBaseUrl: 'http://localhost:5000',
+            ),
+          ),
           courtRepositoryProvider
               .overrideWithValue(repo ?? _FakeCourtRepository()),
           courtFormLookupsProvider.overrideWith((ref) async => data),

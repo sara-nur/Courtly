@@ -13,8 +13,9 @@ public class CourtRequestValidatorTests
 
     private static CreateCourtRequest Request(
         string name = "Center Court", string? description = "Main court.", long cityId = 1,
-        long surfaceTypeId = 1, long courtTypeId = 1, decimal hourlyPrice = 20m) =>
-        new(name, description, cityId, surfaceTypeId, courtTypeId, false, true, false, hourlyPrice);
+        long surfaceTypeId = 1, long courtTypeId = 1, decimal hourlyPrice = 20m,
+        double? latitude = null, double? longitude = null) =>
+        new(name, description, cityId, surfaceTypeId, courtTypeId, false, true, false, hourlyPrice, latitude, longitude);
 
     [Fact]
     public void Valid_request_passes()
@@ -63,5 +64,62 @@ public class CourtRequestValidatorTests
         Assert.Contains(result.Errors, e => e.PropertyName == nameof(CreateCourtRequest.CityId));
         Assert.Contains(result.Errors, e => e.PropertyName == nameof(CreateCourtRequest.SurfaceTypeId));
         Assert.Contains(result.Errors, e => e.PropertyName == nameof(CreateCourtRequest.CourtTypeId));
+    }
+
+    // --- Map location (feature 11): both-or-neither + ranges --------------------------------------
+
+    [Fact]
+    public void No_location_is_valid()
+    {
+        Assert.True(_validator.Validate(Request(latitude: null, longitude: null)).IsValid);
+    }
+
+    [Fact]
+    public void Valid_lat_lng_pair_passes()
+    {
+        Assert.True(_validator.Validate(Request(latitude: 43.8563, longitude: 18.4131)).IsValid);
+    }
+
+    [Fact]
+    public void Latitude_without_longitude_is_rejected_as_incomplete()
+    {
+        var result = _validator.Validate(Request(latitude: 43.8563, longitude: null));
+
+        Assert.False(result.IsValid);
+        var error = Assert.Single(result.Errors, e => e.PropertyName == nameof(CreateCourtRequest.Latitude));
+        Assert.Contains("together", error.ErrorMessage);
+    }
+
+    [Fact]
+    public void Longitude_without_latitude_is_rejected_as_incomplete()
+    {
+        var result = _validator.Validate(Request(latitude: null, longitude: 18.4131));
+
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, e => e.PropertyName == nameof(CreateCourtRequest.Latitude));
+    }
+
+    [Theory]
+    [InlineData(91)]
+    [InlineData(-91)]
+    public void Latitude_out_of_range_is_rejected(double latitude)
+    {
+        var result = _validator.Validate(Request(latitude: latitude, longitude: 18.4131));
+
+        Assert.False(result.IsValid);
+        var error = Assert.Single(result.Errors, e => e.PropertyName == nameof(CreateCourtRequest.Latitude));
+        Assert.Contains("-90", error.ErrorMessage);
+    }
+
+    [Theory]
+    [InlineData(181)]
+    [InlineData(-181)]
+    public void Longitude_out_of_range_is_rejected(double longitude)
+    {
+        var result = _validator.Validate(Request(latitude: 43.8563, longitude: longitude));
+
+        Assert.False(result.IsValid);
+        var error = Assert.Single(result.Errors, e => e.PropertyName == nameof(CreateCourtRequest.Longitude));
+        Assert.Contains("-180", error.ErrorMessage);
     }
 }

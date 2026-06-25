@@ -57,9 +57,10 @@ public class CourtServiceTests
 
     private static CreateCourtRequest NewCourtRequest(
         Refs refs, string name = "Center Court", string? description = "Main show court.",
-        bool isIndoor = false, bool isActive = true, bool isFeatured = false, decimal hourlyPrice = 20m) =>
+        bool isIndoor = false, bool isActive = true, bool isFeatured = false, decimal hourlyPrice = 20m,
+        double? latitude = null, double? longitude = null) =>
         new(name, description, refs.CityId, refs.SurfaceTypeId, refs.CourtTypeId,
-            isIndoor, isActive, isFeatured, hourlyPrice);
+            isIndoor, isActive, isFeatured, hourlyPrice, latitude, longitude);
 
     // --- Create + FK validation ------------------------------------------------------------------
 
@@ -96,6 +97,32 @@ public class CourtServiceTests
 
         Assert.Equal("Baseline", dto.Name);
         Assert.Null(dto.Description);
+    }
+
+    [Fact]
+    public async Task CreateAsync_persists_lat_lng_and_round_trips_through_the_dto()
+    {
+        await using var db = NewDb();
+        var refs = await SeedRefsAsync(db);
+        var service = NewService(db);
+
+        var created = await service.CreateAsync(NewCourtRequest(refs, latitude: 43.8563, longitude: 18.4131));
+
+        Assert.Equal(43.8563, created.Latitude);
+        Assert.Equal(18.4131, created.Longitude);
+
+        // Re-read via the list/detail projection to prove lat/lng survive the round-trip, not just the post-write read.
+        var refetched = await service.GetByIdAsync(created.Id);
+        Assert.Equal(43.8563, refetched.Latitude);
+        Assert.Equal(18.4131, refetched.Longitude);
+
+        // Update can move and then clear the location (both-or-neither is enforced by the validator, not here).
+        var moved = await service.UpdateAsync(created.Id, new UpdateCourtRequest(
+            created.Name, created.Description, refs.CityId, refs.SurfaceTypeId, refs.CourtTypeId,
+            created.IsIndoor, created.IsActive, created.IsFeatured, created.HourlyPrice,
+            Latitude: 45.0, Longitude: 16.0));
+        Assert.Equal(45.0, moved.Latitude);
+        Assert.Equal(16.0, moved.Longitude);
     }
 
     [Fact]
