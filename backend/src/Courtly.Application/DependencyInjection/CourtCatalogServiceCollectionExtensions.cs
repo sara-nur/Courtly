@@ -1,5 +1,6 @@
 using Courtly.Application.Abstractions;
 using Courtly.Application.Courts;
+using Courtly.Application.Courts.Maintenance;
 using Courtly.Application.Courts.Media;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -17,6 +18,7 @@ public static class CourtCatalogServiceCollectionExtensions
     {
         services.AddScoped<ICourtService, CourtService>();
         services.AddScoped<ICourtMediaService, CourtMediaService>();
+        services.AddScoped<IMaintenanceService, MaintenanceService>();
 
         return services;
     }

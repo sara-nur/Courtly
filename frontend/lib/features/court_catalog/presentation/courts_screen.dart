@@ -12,6 +12,7 @@ import '../../reference_data/domain/reference_models.dart';
 import '../application/court_providers.dart';
 import '../domain/court_models.dart';
 import 'forms/court_form.dart';
+import 'maintenance/maintenance_modal.dart';
 import 'widgets/court_card.dart';
 
 /// Court Management (Feature 10): a top-level routed screen with a filter
@@ -72,6 +73,8 @@ class CourtsScreen extends ConsumerWidget {
                 result: result,
                 onEdit: (court) => showCourtForm(context, ref, existing: court),
                 onDelete: (court) => _confirmDelete(context, ref, court),
+                onManageMaintenance: (court) =>
+                    showCourtMaintenance(context, ref, court),
                 onNextPage: controller.nextPage,
                 onPrevPage: controller.prevPage,
               ),
@@ -295,13 +298,25 @@ class _FilterBar extends ConsumerWidget {
                     : filters.copyWith(clearIndoor: true),
               ),
             ),
+            // "Active only" = currently available: active AND not under maintenance. Mutually exclusive with the
+            // Maintenance chip (selecting one clears the other).
             FilterChip(
               label: const Text('Active only'),
               selected: filters.isActive == true,
               onSelected: (on) => controller.setFilters(
                 on
-                    ? filters.copyWith(isActive: true)
-                    : filters.copyWith(clearActive: true),
+                    ? filters.copyWith(isActive: true, underMaintenance: false)
+                    : filters.copyWith(
+                        clearActive: true, clearUnderMaintenance: true),
+              ),
+            ),
+            FilterChip(
+              label: const Text('Maintenance'),
+              selected: filters.underMaintenance == true,
+              onSelected: (on) => controller.setFilters(
+                on
+                    ? filters.copyWith(underMaintenance: true, clearActive: true)
+                    : filters.copyWith(clearUnderMaintenance: true),
               ),
             ),
             _PriceField(
@@ -419,6 +434,7 @@ class _CourtGrid extends StatelessWidget {
     required this.result,
     required this.onEdit,
     required this.onDelete,
+    required this.onManageMaintenance,
     required this.onNextPage,
     required this.onPrevPage,
   });
@@ -426,6 +442,7 @@ class _CourtGrid extends StatelessWidget {
   final PagedResult<Court> result;
   final void Function(Court) onEdit;
   final void Function(Court) onDelete;
+  final void Function(Court) onManageMaintenance;
   final VoidCallback onNextPage;
   final VoidCallback onPrevPage;
 
@@ -460,6 +477,7 @@ class _CourtGrid extends StatelessWidget {
                     court: court,
                     onEdit: () => onEdit(court),
                     onDelete: () => onDelete(court),
+                    onManageMaintenance: () => onManageMaintenance(court),
                   );
                 },
               );

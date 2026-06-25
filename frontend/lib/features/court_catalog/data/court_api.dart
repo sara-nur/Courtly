@@ -43,6 +43,7 @@ class CourtApi {
     bool? isFeatured,
     double? minPrice,
     double? maxPrice,
+    bool? underMaintenance,
   }) {
     final query = <String, dynamic>{'page': page, 'pageSize': pageSize};
     if (search != null && search.trim().isNotEmpty) {
@@ -57,6 +58,7 @@ class CourtApi {
     if (isFeatured != null) query['isFeatured'] = isFeatured;
     if (minPrice != null) query['minPrice'] = minPrice;
     if (maxPrice != null) query['maxPrice'] = maxPrice;
+    if (underMaintenance != null) query['underMaintenance'] = underMaintenance;
     return query;
   }
 
@@ -73,6 +75,7 @@ class CourtApi {
     bool? isFeatured,
     double? minPrice,
     double? maxPrice,
+    bool? underMaintenance,
   }) async {
     final response = await _dio.get<dynamic>(
       _courts,
@@ -89,6 +92,7 @@ class CourtApi {
         isFeatured: isFeatured,
         minPrice: minPrice,
         maxPrice: maxPrice,
+        underMaintenance: underMaintenance,
       ),
     );
     return PagedResult<Court>.fromJson(
@@ -187,4 +191,60 @@ class CourtApi {
         await _dio.put<dynamic>('$_courts/$courtId/amenities', data: body);
     return _parseList(response.data, CourtAmenityLink.fromJson);
   }
+
+  // --- Court maintenance (F12) -----------------------------------------------
+  //
+  //   GET  /api/courts/{id}/maintenance            (paged status history)
+  //   POST /api/courts/{id}/maintenance            ({reason, startUtc?, endUtc?})
+  //   POST /api/courts/{id}/maintenance/{logId}/start | fix | cancel
+
+  Future<PagedResult<CourtMaintenanceLog>> listMaintenance(
+    int courtId, {
+    int page = 1,
+    int pageSize = 50,
+  }) async {
+    final response = await _dio.get<dynamic>(
+      '$_courts/$courtId/maintenance',
+      queryParameters: {'page': page, 'pageSize': pageSize},
+    );
+    return PagedResult<CourtMaintenanceLog>.fromJson(
+      (response.data as Map).cast<String, dynamic>(),
+      CourtMaintenanceLog.fromJson,
+    );
+  }
+
+  Future<CourtMaintenanceLog> createMaintenance(
+    int courtId, {
+    required String reason,
+    DateTime? startUtc,
+    DateTime? endUtc,
+  }) async {
+    final response = await _dio.post<dynamic>(
+      '$_courts/$courtId/maintenance',
+      data: <String, dynamic>{
+        'reason': reason,
+        'startUtc': startUtc?.toUtc().toIso8601String(),
+        'endUtc': endUtc?.toUtc().toIso8601String(),
+      },
+    );
+    return CourtMaintenanceLog.fromJson(
+        (response.data as Map).cast<String, dynamic>());
+  }
+
+  Future<CourtMaintenanceLog> _transition(
+      int courtId, int logId, String action) async {
+    final response = await _dio
+        .post<dynamic>('$_courts/$courtId/maintenance/$logId/$action');
+    return CourtMaintenanceLog.fromJson(
+        (response.data as Map).cast<String, dynamic>());
+  }
+
+  Future<CourtMaintenanceLog> startMaintenance(int courtId, int logId) =>
+      _transition(courtId, logId, 'start');
+
+  Future<CourtMaintenanceLog> fixMaintenance(int courtId, int logId) =>
+      _transition(courtId, logId, 'fix');
+
+  Future<CourtMaintenanceLog> cancelMaintenance(int courtId, int logId) =>
+      _transition(courtId, logId, 'cancel');
 }

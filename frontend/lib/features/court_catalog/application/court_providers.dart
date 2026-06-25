@@ -40,6 +40,7 @@ class CourtFilters {
     this.isFeatured,
     this.minPrice,
     this.maxPrice,
+    this.underMaintenance,
   });
 
   final String search;
@@ -52,6 +53,7 @@ class CourtFilters {
   final bool? isFeatured;
   final double? minPrice;
   final double? maxPrice;
+  final bool? underMaintenance;
 
   /// Rebuilds the filter set. Each parameter takes a sentinel-free pair so a
   /// caller can clear a value back to null (e.g. `cityId: null, clearCity: true`).
@@ -75,6 +77,8 @@ class CourtFilters {
     bool clearMinPrice = false,
     double? maxPrice,
     bool clearMaxPrice = false,
+    bool? underMaintenance,
+    bool clearUnderMaintenance = false,
   }) =>
       CourtFilters(
         search: search ?? this.search,
@@ -88,6 +92,9 @@ class CourtFilters {
         isFeatured: clearFeatured ? null : (isFeatured ?? this.isFeatured),
         minPrice: clearMinPrice ? null : (minPrice ?? this.minPrice),
         maxPrice: clearMaxPrice ? null : (maxPrice ?? this.maxPrice),
+        underMaintenance: clearUnderMaintenance
+            ? null
+            : (underMaintenance ?? this.underMaintenance),
       );
 }
 
@@ -147,6 +154,7 @@ class CourtListController extends Notifier<CourtListState> {
             isFeatured: filters.isFeatured,
             minPrice: filters.minPrice,
             maxPrice: filters.maxPrice,
+            underMaintenance: filters.underMaintenance,
           ),
     );
 
@@ -199,6 +207,16 @@ class CourtListController extends Notifier<CourtListState> {
 final courtListControllerProvider =
     NotifierProvider<CourtListController, CourtListState>(
         CourtListController.new);
+
+/// The maintenance windows (status history) for a court, newest-first (F12). The
+/// maintenance modal watches this; after a create/start/fix/cancel, invalidate
+/// `maintenanceHistoryProvider(courtId)` to refresh the timeline.
+final maintenanceHistoryProvider =
+    FutureProvider.family<List<CourtMaintenanceLog>, int>((ref, courtId) async {
+  final result =
+      await ref.watch(courtRepositoryProvider).listMaintenance(courtId);
+  return result.items;
+});
 
 // --- FK dropdown lookups -----------------------------------------------------
 //

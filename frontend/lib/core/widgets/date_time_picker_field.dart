@@ -67,6 +67,9 @@ class DateTimePickerField extends StatelessWidget {
       final TimeOfDay? pickedTime = await showTimePicker(
         context: context,
         initialTime: TimeOfDay.fromDateTime(value ?? DateTime.now()),
+        // Open in keyboard-entry mode (type HH:MM) — friendlier than the clock dial,
+        // especially on desktop; the user can still toggle to the dial.
+        initialEntryMode: TimePickerEntryMode.input,
       );
       if (pickedTime == null) {
         return;

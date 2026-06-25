@@ -9,6 +9,8 @@
 /// no `core/` copy) to avoid a DRY violation — do not redefine it here.
 library;
 
+import '../../../core/enums/maintenance_status.dart';
+
 export '../../reference_data/domain/reference_models.dart' show PagedResult;
 
 /// A bookable court. FK ids travel with the payload for create/update; the UI
@@ -20,8 +22,14 @@ export '../../reference_data/domain/reference_models.dart' show PagedResult;
 /// links are sub-resources modeled separately ([CourtImage], [CourtAmenityLink])
 /// and loaded by the form on demand.
 ///
-/// Remaining deferred fields (maintenance, popularity, rating) are intentionally
-/// NOT modeled here — they belong to later features.
+/// Feature 12 adds the derived maintenance state ([isUnderMaintenance] +
+/// [maintenanceReason]/[maintenanceStartUtc]) so the grid card can show a
+/// Maintenance badge and "Unavailable for reservations". These are read-only
+/// projections of the court's OPEN maintenance window; the windows themselves
+/// ([CourtMaintenanceLog]) are managed via the maintenance modal.
+///
+/// Remaining deferred fields (popularity, rating) are intentionally NOT modeled
+/// here — they belong to later features.
 class Court {
   const Court({
     required this.id,
@@ -42,6 +50,9 @@ class Court {
     this.latitude,
     this.longitude,
     this.primaryImageUrl,
+    this.isUnderMaintenance = false,
+    this.maintenanceReason,
+    this.maintenanceStartUtc,
   });
 
   final int id;
@@ -72,6 +83,16 @@ class Court {
   /// configured base URL via `absoluteImageUrl` before display.
   final String? primaryImageUrl;
 
+  /// True when the court has an OPEN maintenance window covering now (F12) — it
+  /// is then unavailable for reservations and excluded from analytics.
+  final bool isUnderMaintenance;
+
+  /// Reason of the active maintenance window (null when not under maintenance).
+  final String? maintenanceReason;
+
+  /// When the active maintenance window started (null when not under maintenance).
+  final DateTime? maintenanceStartUtc;
+
   factory Court.fromJson(Map<String, dynamic> json) => Court(
         id: (json['id'] as num).toInt(),
         name: json['name'] as String,
@@ -91,6 +112,52 @@ class Court {
         latitude: (json['latitude'] as num?)?.toDouble(),
         longitude: (json['longitude'] as num?)?.toDouble(),
         primaryImageUrl: json['primaryImageUrl'] as String?,
+        isUnderMaintenance: json['isUnderMaintenance'] as bool? ?? false,
+        maintenanceReason: json['maintenanceReason'] as String?,
+        maintenanceStartUtc: json['maintenanceStartUtc'] == null
+            ? null
+            : DateTime.parse(json['maintenanceStartUtc'] as String),
+      );
+}
+
+/// One court maintenance WINDOW (feature 12) — a row in the court's status
+/// history. Mirrors the backend `CourtMaintenanceLogDto`: a [status] that moves
+/// through the maintenance state machine, the [reason], the [startUtc]/[endUtc]
+/// window, and the resolved [performedByName] (never a raw user id) for the
+/// "who/when/why" history.
+class CourtMaintenanceLog {
+  const CourtMaintenanceLog({
+    required this.id,
+    required this.courtId,
+    required this.status,
+    required this.reason,
+    required this.startUtc,
+    this.endUtc,
+    this.performedByName,
+    required this.createdAtUtc,
+  });
+
+  final int id;
+  final int courtId;
+  final MaintenanceStatus status;
+  final String reason;
+  final DateTime startUtc;
+  final DateTime? endUtc;
+  final String? performedByName;
+  final DateTime createdAtUtc;
+
+  factory CourtMaintenanceLog.fromJson(Map<String, dynamic> json) =>
+      CourtMaintenanceLog(
+        id: (json['id'] as num).toInt(),
+        courtId: (json['courtId'] as num?)?.toInt() ?? 0,
+        status: MaintenanceStatus.fromWire((json['status'] as num).toInt()),
+        reason: json['reason'] as String? ?? '',
+        startUtc: DateTime.parse(json['startUtc'] as String),
+        endUtc: json['endUtc'] == null
+            ? null
+            : DateTime.parse(json['endUtc'] as String),
+        performedByName: json['performedByName'] as String?,
+        createdAtUtc: DateTime.parse(json['createdAtUtc'] as String),
       );
 }
 

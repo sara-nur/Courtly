@@ -1,8 +1,10 @@
+using Courtly.Application.Abstractions;
 using Courtly.Application.Common.Exceptions;
 using Courtly.Application.Courts;
 using Courtly.Contracts.Common;
 using Courtly.Contracts.Court;
 using Courtly.Domain.Entities;
+using Courtly.Domain.Enums;
 using Courtly.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -24,15 +26,25 @@ public class CourtServiceTests
             .UseInMemoryDatabase($"courts-{Guid.NewGuid()}")
             .Options);
 
-    private static CourtService NewService(CourtlyDbContext db) =>
-        new(db, NullLogger<CourtService>.Instance);
+    /// <summary>A fixed clock so the maintenance "covering now" projection is deterministic in tests.</summary>
+    private static readonly DateTime FixedNow = new(2026, 6, 25, 12, 0, 0, DateTimeKind.Utc);
+
+    private sealed class TestClock : IClock
+    {
+        public TestClock(DateTime now) => UtcNow = now;
+        public DateTime UtcNow { get; }
+    }
+
+    private static CourtService NewService(CourtlyDbContext db, DateTime? now = null) =>
+        new(db, new TestClock(now ?? FixedNow), NullLogger<CourtService>.Instance);
 
     /// <summary>An all-null filter; named args override only the dimension under test.</summary>
     private static CourtListQuery Filter(
         string? search = null, long? cityId = null, long? countryId = null, long? surfaceTypeId = null,
         long? courtTypeId = null, bool? isIndoor = null, bool? isActive = null, decimal? minPrice = null,
-        decimal? maxPrice = null, bool? isFeatured = null) =>
-        new(search, cityId, countryId, surfaceTypeId, courtTypeId, isIndoor, isActive, minPrice, maxPrice, isFeatured);
+        decimal? maxPrice = null, bool? isFeatured = null, bool? underMaintenance = null) =>
+        new(search, cityId, countryId, surfaceTypeId, courtTypeId, isIndoor, isActive, minPrice, maxPrice,
+            isFeatured, underMaintenance);
 
     private sealed record Refs(long CountryId, long CityId, long SurfaceTypeId, long CourtTypeId);
 
@@ -339,6 +351,84 @@ public class CourtServiceTests
 
         Assert.Equal(3, page.TotalCount);
         Assert.Equal("Third", page.Items[0].Name); // highest id first
+    }
+
+    // --- Maintenance projection + filter (F12) ---------------------------------------------------
+
+    [Fact]
+    public async Task GetByIdAsync_marks_court_under_maintenance_when_an_open_window_covers_now()
+    {
+        await using var db = NewDb();
+        var refs = await SeedRefsAsync(db);
+        var court = new Court { Name = "Center Court", CityId = refs.CityId, SurfaceTypeId = refs.SurfaceTypeId, CourtTypeId = refs.CourtTypeId };
+        db.Courts.Add(court);
+        await db.SaveChangesAsync();
+        db.CourtMaintenanceLogs.Add(new CourtMaintenanceLog
+        {
+            CourtId = court.Id,
+            Status = MaintenanceStatus.InProgress,
+            Reason = "Resurfacing",
+            StartUtc = FixedNow.AddHours(-1),
+            EndUtc = null,
+            CreatedAtUtc = FixedNow.AddHours(-1),
+        });
+        await db.SaveChangesAsync();
+        var service = NewService(db);
+
+        var dto = await service.GetByIdAsync(court.Id);
+
+        Assert.True(dto.IsUnderMaintenance);
+        Assert.Equal("Resurfacing", dto.MaintenanceReason);
+        Assert.Equal(FixedNow.AddHours(-1), dto.MaintenanceStartUtc);
+    }
+
+    [Fact]
+    public async Task GetByIdAsync_not_under_maintenance_when_window_is_terminal_or_future()
+    {
+        await using var db = NewDb();
+        var refs = await SeedRefsAsync(db);
+        var court = new Court { Name = "Center Court", CityId = refs.CityId, SurfaceTypeId = refs.SurfaceTypeId, CourtTypeId = refs.CourtTypeId };
+        db.Courts.Add(court);
+        await db.SaveChangesAsync();
+        db.CourtMaintenanceLogs.AddRange(
+            // Completed (terminal) window in the past → does not count.
+            new CourtMaintenanceLog { CourtId = court.Id, Status = MaintenanceStatus.Completed, Reason = "Old fix", StartUtc = FixedNow.AddDays(-2), EndUtc = FixedNow.AddDays(-2).AddHours(2), CreatedAtUtc = FixedNow.AddDays(-2) },
+            // Scheduled window starting tomorrow → not covering now.
+            new CourtMaintenanceLog { CourtId = court.Id, Status = MaintenanceStatus.Scheduled, Reason = "Future", StartUtc = FixedNow.AddDays(1), EndUtc = null, CreatedAtUtc = FixedNow });
+        await db.SaveChangesAsync();
+        var service = NewService(db);
+
+        var dto = await service.GetByIdAsync(court.Id);
+
+        Assert.False(dto.IsUnderMaintenance);
+        Assert.Null(dto.MaintenanceReason);
+    }
+
+    [Fact]
+    public async Task GetPagedAsync_filters_by_under_maintenance()
+    {
+        await using var db = NewDb();
+        var refs = await SeedRefsAsync(db);
+        var down = new Court { Name = "Down", CityId = refs.CityId, SurfaceTypeId = refs.SurfaceTypeId, CourtTypeId = refs.CourtTypeId };
+        var up = new Court { Name = "Up", CityId = refs.CityId, SurfaceTypeId = refs.SurfaceTypeId, CourtTypeId = refs.CourtTypeId };
+        db.Courts.AddRange(down, up);
+        await db.SaveChangesAsync();
+        db.CourtMaintenanceLogs.Add(new CourtMaintenanceLog
+        {
+            CourtId = down.Id,
+            Status = MaintenanceStatus.InProgress,
+            Reason = "Lights out",
+            StartUtc = FixedNow.AddHours(-1),
+            CreatedAtUtc = FixedNow.AddHours(-1),
+        });
+        await db.SaveChangesAsync();
+        var service = NewService(db);
+
+        var maint = await service.GetPagedAsync(new PaginationQuery(), Filter(underMaintenance: true));
+        var available = await service.GetPagedAsync(new PaginationQuery(), Filter(underMaintenance: false));
+
+        Assert.Equal("Down", Assert.Single(maint.Items).Name);
+        Assert.Equal("Up", Assert.Single(available.Items).Name);
     }
 
     // --- Update ----------------------------------------------------------------------------------
