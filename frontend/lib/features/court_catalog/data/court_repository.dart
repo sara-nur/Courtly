@@ -205,4 +205,54 @@ class CourtRepository {
       throw ApiException.from(e);
     }
   }
+
+  // --- Court time slots (F13) ------------------------------------------------
+
+  Future<GenerateSlotsResult> generateSlots(
+    int courtId, {
+    required DateTime fromDate,
+    required DateTime toDate,
+    required int openHour,
+    required int closeHour,
+    required int slotMinutes,
+    double? eveningPeakMultiplier,
+  }) async {
+    try {
+      return await _api.generateSlots(
+        courtId,
+        fromDate: fromDate,
+        toDate: toDate,
+        openHour: openHour,
+        closeHour: closeHour,
+        slotMinutes: slotMinutes,
+        eveningPeakMultiplier: eveningPeakMultiplier,
+      );
+    } on DioException catch (e) {
+      throw ApiException.from(e);
+    }
+  }
+
+  Future<DayAvailability> availability(int courtId, DateTime date) async {
+    try {
+      return await _api.availability(courtId, date);
+    } on DioException catch (e) {
+      throw ApiException.from(e);
+    }
+  }
+
+  Future<void> removeSlot(int courtId, int slotId) async {
+    try {
+      await _api.removeSlot(courtId, slotId);
+    } on DioException catch (e) {
+      throw ApiException.from(e);
+    }
+  }
+
+  Future<RemoveSlotsResult> removeDaySlots(int courtId, DateTime date) async {
+    try {
+      return await _api.removeDaySlots(courtId, date);
+    } on DioException catch (e) {
+      throw ApiException.from(e);
+    }
+  }
 }

@@ -10,6 +10,7 @@
 library;
 
 import '../../../core/enums/maintenance_status.dart';
+import '../../../core/enums/time_of_day_bucket.dart';
 
 export '../../reference_data/domain/reference_models.dart' show PagedResult;
 
@@ -219,5 +220,120 @@ class CourtAmenityLink {
         iconKey: json['iconKey'] as String?,
         note: json['note'] as String?,
         isHighlighted: json['isHighlighted'] as bool? ?? false,
+      );
+}
+
+/// One bookable time slot in a day's availability (feature 13). The [price] is
+/// server-owned; [isTaken] is true when an active reservation holds the slot —
+/// taken slots render disabled (and can't be removed). Times arrive UTC; render
+/// with `.toLocal()`.
+class AvailabilitySlot {
+  const AvailabilitySlot({
+    required this.id,
+    required this.startUtc,
+    required this.endUtc,
+    required this.price,
+    required this.isTaken,
+  });
+
+  final int id;
+  final DateTime startUtc;
+  final DateTime endUtc;
+  final double price;
+  final bool isTaken;
+
+  factory AvailabilitySlot.fromJson(Map<String, dynamic> json) =>
+      AvailabilitySlot(
+        id: (json['id'] as num).toInt(),
+        startUtc: DateTime.parse(json['startUtc'] as String),
+        endUtc: DateTime.parse(json['endUtc'] as String),
+        price: (json['price'] as num).toDouble(),
+        isTaken: json['isTaken'] as bool? ?? false,
+      );
+}
+
+/// One time-of-day group (Morning / Afternoon / Evening) of a day's slots. The
+/// backend sends the human [bucketName] so the UI never maps the raw enum.
+class AvailabilityBucket {
+  const AvailabilityBucket({
+    required this.bucket,
+    required this.bucketName,
+    required this.slots,
+  });
+
+  final TimeOfDayBucket bucket;
+  final String bucketName;
+  final List<AvailabilitySlot> slots;
+
+  factory AvailabilityBucket.fromJson(Map<String, dynamic> json) =>
+      AvailabilityBucket(
+        bucket: TimeOfDayBucket.fromWire((json['bucket'] as num).toInt()),
+        bucketName: json['bucketName'] as String? ?? '',
+        slots: ((json['slots'] as List?) ?? const [])
+            .map((e) => AvailabilitySlot.fromJson((e as Map).cast<String, dynamic>()))
+            .toList(growable: false),
+      );
+}
+
+/// A court's availability for a single day: the three time-of-day [buckets] (in
+/// order), each with its free/taken slots. [isCourtUnderMaintenance] is true (and
+/// the buckets empty) when the court has an open maintenance window covering the
+/// day — a maintenance court yields no bookable slots (feature 12 reuse).
+class DayAvailability {
+  const DayAvailability({
+    required this.courtId,
+    required this.date,
+    required this.isCourtUnderMaintenance,
+    required this.buckets,
+  });
+
+  final int courtId;
+  final DateTime date;
+  final bool isCourtUnderMaintenance;
+  final List<AvailabilityBucket> buckets;
+
+  /// True when no bookable slots exist for the day (none generated, or all taken
+  /// / removed). Distinct from [isCourtUnderMaintenance].
+  bool get isEmpty => buckets.every((b) => b.slots.isEmpty);
+
+  factory DayAvailability.fromJson(Map<String, dynamic> json) => DayAvailability(
+        courtId: (json['courtId'] as num?)?.toInt() ?? 0,
+        date: DateTime.parse(json['date'] as String),
+        isCourtUnderMaintenance:
+            json['isCourtUnderMaintenance'] as bool? ?? false,
+        buckets: ((json['buckets'] as List?) ?? const [])
+            .map((e) =>
+                AvailabilityBucket.fromJson((e as Map).cast<String, dynamic>()))
+            .toList(growable: false),
+      );
+}
+
+/// Summary returned after a slot-generation run (feature 13): how many slots were
+/// created and how many existing starts were skipped.
+class GenerateSlotsResult {
+  const GenerateSlotsResult({required this.createdCount, required this.skippedCount});
+
+  final int createdCount;
+  final int skippedCount;
+
+  factory GenerateSlotsResult.fromJson(Map<String, dynamic> json) =>
+      GenerateSlotsResult(
+        createdCount: (json['createdCount'] as num?)?.toInt() ?? 0,
+        skippedCount: (json['skippedCount'] as num?)?.toInt() ?? 0,
+      );
+}
+
+/// Result of removing a day's slots (feature 13): how many were removed and how
+/// many were kept because they are actively booked.
+class RemoveSlotsResult {
+  const RemoveSlotsResult({required this.removedCount, required this.blockedCount});
+
+  final int removedCount;
+  final int blockedCount;
+
+  factory RemoveSlotsResult.fromJson(Map<String, dynamic> json) =>
+      RemoveSlotsResult(
+        removedCount: (json['removedCount'] as num?)?.toInt() ?? 0,
+        blockedCount: (json['blockedCount'] as num?)?.toInt() ?? 0,
       );
 }

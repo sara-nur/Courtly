@@ -13,6 +13,7 @@ import '../application/court_providers.dart';
 import '../domain/court_models.dart';
 import 'forms/court_form.dart';
 import 'maintenance/maintenance_modal.dart';
+import 'slots/slots_modal.dart';
 import 'widgets/court_card.dart';
 
 /// Court Management (Feature 10): a top-level routed screen with a filter
@@ -75,6 +76,7 @@ class CourtsScreen extends ConsumerWidget {
                 onDelete: (court) => _confirmDelete(context, ref, court),
                 onManageMaintenance: (court) =>
                     showCourtMaintenance(context, ref, court),
+                onManageSlots: (court) => showCourtSlots(context, ref, court),
                 onNextPage: controller.nextPage,
                 onPrevPage: controller.prevPage,
               ),
@@ -435,6 +437,7 @@ class _CourtGrid extends StatelessWidget {
     required this.onEdit,
     required this.onDelete,
     required this.onManageMaintenance,
+    required this.onManageSlots,
     required this.onNextPage,
     required this.onPrevPage,
   });
@@ -443,6 +446,7 @@ class _CourtGrid extends StatelessWidget {
   final void Function(Court) onEdit;
   final void Function(Court) onDelete;
   final void Function(Court) onManageMaintenance;
+  final void Function(Court) onManageSlots;
   final VoidCallback onNextPage;
   final VoidCallback onPrevPage;
 
@@ -478,6 +482,7 @@ class _CourtGrid extends StatelessWidget {
                     onEdit: () => onEdit(court),
                     onDelete: () => onDelete(court),
                     onManageMaintenance: () => onManageMaintenance(court),
+                    onManageSlots: () => onManageSlots(court),
                   );
                 },
               );
