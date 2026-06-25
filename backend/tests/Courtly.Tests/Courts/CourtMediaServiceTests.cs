@@ -1,3 +1,4 @@
+using Courtly.Application.Abstractions;
 using Courtly.Application.Common.Exceptions;
 using Courtly.Application.Courts;
 using Courtly.Application.Courts.Media;
@@ -28,8 +29,13 @@ public class CourtMediaServiceTests
     private static CourtMediaService NewService(CourtlyDbContext db) =>
         new(db, NullLogger<CourtMediaService>.Instance);
 
+    private sealed class TestClock : IClock
+    {
+        public DateTime UtcNow => new(2026, 6, 25, 12, 0, 0, DateTimeKind.Utc);
+    }
+
     private static CourtService NewCourtService(CourtlyDbContext db) =>
-        new(db, NullLogger<CourtService>.Instance);
+        new(db, new TestClock(), NullLogger<CourtService>.Instance);
 
     // Minimal valid PNG payload: the 8-byte signature plus a little body so the magic-byte guard passes.
     private static byte[] Png() =>

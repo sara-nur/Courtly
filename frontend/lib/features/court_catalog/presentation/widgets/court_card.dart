@@ -12,22 +12,28 @@ import '../../domain/court_models.dart';
 
 /// A grid card for one [Court]: the seeded image (graceful placeholder when
 /// none), the court name, its surface + indoor/outdoor and city, the formatted
-/// hourly rate, Active/Inactive + (optional) Featured badges, and Edit/Delete
-/// affordances. No raw ids are ever shown (rubric).
+/// hourly rate, Active/Inactive + (optional) Featured badges, and
+/// Maintenance/Edit/Delete affordances. No raw ids are ever shown (rubric).
 ///
-/// Deferred fields (popularity, maintenance, Reserved/Available) are
-/// intentionally NOT rendered — they belong to later features.
+/// Feature 12 adds the status badge: a court with an OPEN maintenance window
+/// shows a **Maintenance** badge + "Unavailable for reservations", and the
+/// wrench action opens the maintenance modal (status, scheduling, Fix, history).
+///
+/// Deferred fields (popularity, Reserved) are intentionally NOT rendered — they
+/// belong to later features.
 class CourtCard extends StatelessWidget {
   const CourtCard({
     super.key,
     required this.court,
     required this.onEdit,
     required this.onDelete,
+    required this.onManageMaintenance,
   });
 
   final Court court;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
+  final VoidCallback onManageMaintenance;
 
   @override
   Widget build(BuildContext context) {
@@ -72,19 +78,39 @@ class CourtCard extends StatelessWidget {
                   spacing: AppSpacing.xs,
                   runSpacing: AppSpacing.xs,
                   children: [
-                    StatusBadge(
-                      label: court.isActive ? 'Active' : 'Inactive',
-                      tone:
-                          court.isActive ? StatusTone.success : StatusTone.neutral,
-                    ),
+                    // Maintenance takes precedence over the green "Active": effective availability is
+                    // active AND not under maintenance. "Inactive" still shows — it is a separate, persistent reason.
+                    if (court.isUnderMaintenance)
+                      const StatusBadge(
+                          label: 'Maintenance', tone: StatusTone.warning),
+                    if (!court.isUnderMaintenance && court.isActive)
+                      const StatusBadge(label: 'Active', tone: StatusTone.success),
+                    if (!court.isActive)
+                      const StatusBadge(label: 'Inactive', tone: StatusTone.neutral),
                     if (court.isFeatured)
                       const StatusBadge(label: 'Featured', tone: StatusTone.info),
                   ],
                 ),
+                if (court.isUnderMaintenance) ...[
+                  const SizedBox(height: AppSpacing.xxs),
+                  Text(
+                    'Unavailable for reservations',
+                    style: theme.textTheme.bodySmall
+                        ?.copyWith(color: AppColors.textMuted),
+                  ),
+                ],
                 const SizedBox(height: AppSpacing.xs),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.end,
                   children: [
+                    IconButton(
+                      tooltip: 'Maintenance & status',
+                      icon: const Icon(Icons.build_outlined),
+                      color: court.isUnderMaintenance
+                          ? AppColors.warning
+                          : AppColors.textSecondary,
+                      onPressed: onManageMaintenance,
+                    ),
                     IconButton(
                       tooltip: 'Edit',
                       icon: const Icon(Icons.edit_outlined),

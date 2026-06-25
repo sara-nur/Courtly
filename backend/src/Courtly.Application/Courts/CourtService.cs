@@ -3,6 +3,7 @@ using Courtly.Application.Common.Exceptions;
 using Courtly.Application.Common.Pagination;
 using Courtly.Contracts.Common;
 using Courtly.Contracts.Court;
+using Courtly.Domain.Enums;
 using Courtly.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -25,17 +26,20 @@ namespace Courtly.Application.Courts;
 public sealed class CourtService : ICourtService
 {
     private readonly CourtlyDbContext _db;
+    private readonly IClock _clock;
     private readonly ILogger<CourtService> _logger;
 
-    public CourtService(CourtlyDbContext db, ILogger<CourtService> logger)
+    public CourtService(CourtlyDbContext db, IClock clock, ILogger<CourtService> logger)
     {
         _db = db;
+        _clock = clock;
         _logger = logger;
     }
 
     public async Task<PagedResult<CourtDto>> GetPagedAsync(
         PaginationQuery pagination, CourtListQuery filter, CancellationToken ct = default)
     {
+        var now = _clock.UtcNow;
         var query = _db.Courts.AsNoTracking();
 
         if (!string.IsNullOrWhiteSpace(filter.Search))
@@ -94,9 +98,22 @@ public sealed class CourtService : ICourtService
             query = query.Where(c => c.HourlyPrice <= filter.MaxPrice.Value);
         }
 
+        // Maintenance filter (F12): courts with / without an OPEN window covering now. Runs at the DB (Any subquery).
+        // The open-window predicate is inlined (an EF expression tree cannot call a shared helper method).
+        if (filter.UnderMaintenance.HasValue)
+        {
+            query = filter.UnderMaintenance.Value
+                ? query.Where(c => c.MaintenanceLogs.Any(m =>
+                    (m.Status == MaintenanceStatus.Scheduled || m.Status == MaintenanceStatus.InProgress)
+                    && m.StartUtc <= now && (m.EndUtc == null || m.EndUtc > now)))
+                : query.Where(c => !c.MaintenanceLogs.Any(m =>
+                    (m.Status == MaintenanceStatus.Scheduled || m.Status == MaintenanceStatus.InProgress)
+                    && m.StartUtc <= now && (m.EndUtc == null || m.EndUtc > now)));
+        }
+
         // Project to the provider-agnostic CourtRow (navs -> JOINs, no N+1), page at the DB, then build the
         // PrimaryImageUrl string in memory via ToDto — the URL cannot be translated inside the IQueryable (Npgsql).
-        var paged = await Project(query.OrderByDescending(c => c.Id)) // newest-first
+        var paged = await Project(query.OrderByDescending(c => c.Id), now) // newest-first
             .ToPagedResultAsync(pagination, ct);
 
         return new PagedResult<CourtDto>(
@@ -105,7 +122,7 @@ public sealed class CourtService : ICourtService
 
     public async Task<CourtDto> GetByIdAsync(long id, CancellationToken ct = default)
     {
-        var row = await Project(_db.Courts.AsNoTracking().Where(c => c.Id == id))
+        var row = await Project(_db.Courts.AsNoTracking().Where(c => c.Id == id), _clock.UtcNow)
             .FirstOrDefaultAsync(ct);
 
         return row is null ? throw new NotFoundException($"Court {id} was not found.") : ToDto(row);
@@ -206,8 +223,11 @@ public sealed class CourtService : ICourtService
     /// <see cref="Domain.Entities.Court"/> query BEFORE this projection so the predicate translates server-side —
     /// a <c>Where</c> applied AFTER the projection cannot be translated by the Npgsql provider. Projects to the
     /// intermediate <see cref="CourtRow"/> (scalar primary-image id, never the URL string) so the read stays
-    /// provider-agnostic; <see cref="ToDto"/> builds the URL in memory after materialization.</summary>
-    private static IQueryable<CourtRow> Project(IQueryable<Domain.Entities.Court> source)
+    /// provider-agnostic; <see cref="ToDto"/> builds the URL in memory after materialization. <paramref name="now"/>
+    /// resolves the current maintenance state (F12) inside the same SQL — a court is under maintenance when it has an
+    /// OPEN window (Scheduled/InProgress) covering now; the active window's reason/start are pulled by an ordered
+    /// subquery (earliest covering window).</summary>
+    private static IQueryable<CourtRow> Project(IQueryable<Domain.Entities.Court> source, DateTime now)
     {
         return source.Select(c => new CourtRow(
             c.Id,
@@ -230,7 +250,22 @@ public sealed class CourtService : ICourtService
             c.Images.OrderByDescending(i => i.IsPrimary).ThenBy(i => i.Id)
                 .Select(i => (long?)i.Id).FirstOrDefault(),
             c.Latitude,
-            c.Longitude));
+            c.Longitude,
+            c.MaintenanceLogs.Any(m =>
+                (m.Status == MaintenanceStatus.Scheduled || m.Status == MaintenanceStatus.InProgress)
+                && m.StartUtc <= now && (m.EndUtc == null || m.EndUtc > now)),
+            c.MaintenanceLogs
+                .Where(m => (m.Status == MaintenanceStatus.Scheduled || m.Status == MaintenanceStatus.InProgress)
+                            && m.StartUtc <= now && (m.EndUtc == null || m.EndUtc > now))
+                .OrderBy(m => m.StartUtc)
+                .Select(m => m.Reason)
+                .FirstOrDefault(),
+            c.MaintenanceLogs
+                .Where(m => (m.Status == MaintenanceStatus.Scheduled || m.Status == MaintenanceStatus.InProgress)
+                            && m.StartUtc <= now && (m.EndUtc == null || m.EndUtc > now))
+                .OrderBy(m => m.StartUtc)
+                .Select(m => (DateTime?)m.StartUtc)
+                .FirstOrDefault()));
     }
 
     /// <summary>Maps an intermediate <see cref="CourtRow"/> to the wire DTO, building the relative
@@ -238,13 +273,14 @@ public sealed class CourtService : ICourtService
     private static CourtDto ToDto(CourtRow r) =>
         new(r.Id, r.Name, r.Description, r.CityId, r.CityName, r.CountryId, r.CountryName, r.SurfaceTypeId,
             r.SurfaceTypeName, r.CourtTypeId, r.CourtTypeName, r.IsIndoor, r.IsActive, r.IsFeatured, r.HourlyPrice,
-            r.PrimaryImageId is long pid ? $"/api/images/{pid}" : null, r.Latitude, r.Longitude);
+            r.PrimaryImageId is long pid ? $"/api/images/{pid}" : null, r.Latitude, r.Longitude,
+            r.IsUnderMaintenance, r.MaintenanceReason, r.MaintenanceStartUtc);
 
     /// <summary>Re-reads the row with the nav names projected (single JOIN query) so writes return the same shape
     /// as the read path.</summary>
     private async Task<CourtDto> ProjectAsync(long id, CancellationToken ct)
     {
-        return ToDto(await Project(_db.Courts.AsNoTracking().Where(c => c.Id == id)).FirstAsync(ct));
+        return ToDto(await Project(_db.Courts.AsNoTracking().Where(c => c.Id == id), _clock.UtcNow).FirstAsync(ct));
     }
 
     /// <summary>Provider-agnostic intermediate carrying every scalar <see cref="CourtDto"/> field plus the primary
@@ -268,7 +304,10 @@ public sealed class CourtService : ICourtService
         decimal HourlyPrice,
         long? PrimaryImageId,
         double? Latitude,
-        double? Longitude);
+        double? Longitude,
+        bool IsUnderMaintenance,
+        string? MaintenanceReason,
+        DateTime? MaintenanceStartUtc);
 
     /// <summary>Validates the City FK before insert/update so a bad CityId is a clean 404, not an FK violation.</summary>
     private async Task EnsureCityExistsAsync(long cityId, CancellationToken ct)

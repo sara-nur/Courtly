@@ -28,6 +28,7 @@ class CourtRepository {
     bool? isFeatured,
     double? minPrice,
     double? maxPrice,
+    bool? underMaintenance,
   }) async {
     try {
       return await _api.list(
@@ -43,6 +44,7 @@ class CourtRepository {
         isFeatured: isFeatured,
         minPrice: minPrice,
         maxPrice: maxPrice,
+        underMaintenance: underMaintenance,
       );
     } on DioException catch (e) {
       throw ApiException.from(e);
@@ -143,6 +145,62 @@ class CourtRepository {
   ) async {
     try {
       return await _api.setAmenities(courtId, items);
+    } on DioException catch (e) {
+      throw ApiException.from(e);
+    }
+  }
+
+  // --- Court maintenance (F12) -----------------------------------------------
+
+  Future<PagedResult<CourtMaintenanceLog>> listMaintenance(
+    int courtId, {
+    int page = 1,
+    int pageSize = 50,
+  }) async {
+    try {
+      return await _api.listMaintenance(courtId, page: page, pageSize: pageSize);
+    } on DioException catch (e) {
+      throw ApiException.from(e);
+    }
+  }
+
+  Future<CourtMaintenanceLog> createMaintenance(
+    int courtId, {
+    required String reason,
+    DateTime? startUtc,
+    DateTime? endUtc,
+  }) async {
+    try {
+      return await _api.createMaintenance(
+        courtId,
+        reason: reason,
+        startUtc: startUtc,
+        endUtc: endUtc,
+      );
+    } on DioException catch (e) {
+      throw ApiException.from(e);
+    }
+  }
+
+  Future<CourtMaintenanceLog> startMaintenance(int courtId, int logId) async {
+    try {
+      return await _api.startMaintenance(courtId, logId);
+    } on DioException catch (e) {
+      throw ApiException.from(e);
+    }
+  }
+
+  Future<CourtMaintenanceLog> fixMaintenance(int courtId, int logId) async {
+    try {
+      return await _api.fixMaintenance(courtId, logId);
+    } on DioException catch (e) {
+      throw ApiException.from(e);
+    }
+  }
+
+  Future<CourtMaintenanceLog> cancelMaintenance(int courtId, int logId) async {
+    try {
+      return await _api.cancelMaintenance(courtId, logId);
     } on DioException catch (e) {
       throw ApiException.from(e);
     }
