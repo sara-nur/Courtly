@@ -14,6 +14,18 @@ public interface IReservationService
     /// slot/court/maintenance/overlap preconditions checked server-side).</summary>
     Task<ReservationDetailDto> CreateAsync(CreateReservationRequest request, CancellationToken ct = default);
 
+    /// <summary>Admin/staff manual booking on behalf of a customer (feature 15 "+ New Booking"). Same server-owned
+    /// price/court/overlap rules as <see cref="CreateAsync"/>, but the owner is the supplied user (validated to exist
+    /// and be active); the acting admin is recorded as the audit actor.</summary>
+    Task<ReservationDetailDto> CreateForUserAsync(
+        AdminCreateReservationRequest request, CancellationToken ct = default);
+
+    /// <summary>Moves a non-terminal, unpaid reservation to a different free slot (feature 15). Re-runs the create
+    /// preconditions on the new slot, re-prices from the new slot, audits the change, and frees the old slot. Terminal
+    /// or paid reservations are rejected.</summary>
+    Task<ReservationDetailDto> RescheduleAsync(
+        long id, RescheduleReservationRequest request, CancellationToken ct = default);
+
     /// <summary>Pending → Confirmed (admin/staff manual confirmation; the payment webhook reuses the same path in
     /// feature 16).</summary>
     Task<ReservationDetailDto> ConfirmAsync(long id, CancellationToken ct = default);

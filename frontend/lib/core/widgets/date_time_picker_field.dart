@@ -104,7 +104,10 @@ class DateTimePickerField extends StatelessWidget {
               suffixIcon: const Icon(Icons.event),
               errorText: field.errorText,
             ),
-            isEmpty: current == null,
+            // The widget always renders its own placeholder/value child below, so
+            // the label must stay floated at the top — never let InputDecorator
+            // drop it into the field as a placeholder (which overlaps our child).
+            isEmpty: false,
             child: current != null
                 ? Text(
                     includeTime

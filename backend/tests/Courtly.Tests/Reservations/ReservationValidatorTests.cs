@@ -53,4 +53,41 @@ public class ReservationValidatorTests
 
         Assert.True(result.IsValid);
     }
+
+    [Fact]
+    public void AdminCreate_requires_a_slot_and_a_customer()
+    {
+        var result = new AdminCreateReservationRequestValidator()
+            .Validate(new AdminCreateReservationRequest(0, Guid.Empty));
+
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, e => e.PropertyName == nameof(AdminCreateReservationRequest.TimeSlotId));
+        Assert.Contains(result.Errors, e => e.PropertyName == nameof(AdminCreateReservationRequest.UserId));
+    }
+
+    [Fact]
+    public void AdminCreate_accepts_a_slot_and_a_customer()
+    {
+        var result = new AdminCreateReservationRequestValidator()
+            .Validate(new AdminCreateReservationRequest(42, Guid.NewGuid()));
+
+        Assert.True(result.IsValid);
+    }
+
+    [Fact]
+    public void Reschedule_requires_a_positive_new_slot_id()
+    {
+        var result = new RescheduleReservationRequestValidator().Validate(new RescheduleReservationRequest(0));
+
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, e => e.PropertyName == nameof(RescheduleReservationRequest.NewTimeSlotId));
+    }
+
+    [Fact]
+    public void Reschedule_accepts_a_real_new_slot_id()
+    {
+        var result = new RescheduleReservationRequestValidator().Validate(new RescheduleReservationRequest(7));
+
+        Assert.True(result.IsValid);
+    }
 }
