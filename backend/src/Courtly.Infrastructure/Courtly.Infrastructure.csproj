@@ -9,6 +9,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Feature 16: Stripe server-side payments (PaymentIntent create, webhook HMAC verify, refund). -->
+    <PackageReference Include="Stripe.net" Version="52.1.0" />
+  </ItemGroup>
+
+  <ItemGroup>
     <!-- Feature 3: EF Core + Npgsql (PostgreSQL), Identity-backed DbContext, design-time tooling, snake_case mapping. -->
     <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.8" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.8" />

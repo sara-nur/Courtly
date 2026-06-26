@@ -97,6 +97,7 @@ builder.Services.AddCourtlyReferenceData();   // feature 9 reference-data CRUD s
 builder.Services.AddCourtlyCourtCatalog();    // feature 10 court catalog CRUD services
 builder.Services.AddCourtlyReservations();    // feature 14 reservation engine + state machine
 builder.Services.AddCourtlyUsers();           // feature 15 admin user lookup (15A extends)
+builder.Services.AddCourtlyPayments();        // feature 16 Stripe payments (intent + webhook + refund)
 
 builder.Services
     .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
