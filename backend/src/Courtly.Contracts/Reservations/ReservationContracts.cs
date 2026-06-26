@@ -73,9 +73,21 @@ public sealed record ReservationDetailDto(
 /// the owner from the JWT (rubric §5/§7.1 — never trust the client for owner, court or amount).</summary>
 public sealed record CreateReservationRequest(long TimeSlotId);
 
+/// <summary>Admin/staff manual booking on behalf of a customer (feature 15 "+ New Booking"). Same server-owned
+/// price/court/overlap rules as <see cref="CreateReservationRequest"/>, but the owner is the supplied
+/// <see cref="UserId"/> (validated to exist and be active) rather than the caller — the rubric explicitly allows an
+/// administrator to act on other users' data (§5). The acting admin is still recorded as the audit actor.</summary>
+public sealed record AdminCreateReservationRequest(long TimeSlotId, Guid UserId);
+
 /// <summary>Cancels a reservation. A <see cref="Reason"/> is required (rubric §7: a cancellation/refusal must carry a
 /// reason and raise a notification).</summary>
 public sealed record CancelReservationRequest(string Reason);
+
+/// <summary>Moves a non-terminal, unpaid reservation to a different free slot (feature 15 reschedule). The server
+/// re-runs the same preconditions as create on <see cref="NewTimeSlotId"/> (active/not-past/not-maintenance/no active
+/// overlap), re-prices from the new slot's server-owned price, and audits the change. Paid bookings are blocked (a
+/// price change would need a payment adjustment).</summary>
+public sealed record RescheduleReservationRequest(long NewTimeSlotId);
 
 /// <summary>
 /// Query-string filters for the reservation lists (bound via <c>[FromQuery]</c>, applied at the database). All

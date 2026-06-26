@@ -565,4 +565,148 @@ public class ReservationServiceTests
         Assert.Equal(1, pending.TotalCount);
         Assert.Equal(ReservationStatus.Pending, pending.Items[0].Status);
     }
+
+    // --- Admin manual create (feature 15) -------------------------------------------------------
+
+    [Fact]
+    public async Task CreateForUserAsync_books_for_the_target_customer_with_the_admin_as_actor()
+    {
+        await using var db = NewDb();
+        var (courtId, slotId) = await SeedCourtWithSlotAsync(db);
+        var customer = await SeedUserAsync(db, "walkin");
+        var admin = await SeedUserAsync(db, "frontdesk");
+        var (svc, events) = NewService(db, admin, roles: new[] { Roles.Admin });
+
+        var detail = await svc.CreateForUserAsync(new AdminCreateReservationRequest(slotId, customer));
+
+        Assert.Equal(ReservationStatus.Pending, detail.Reservation.Status);
+        Assert.Equal(customer, detail.Reservation.UserId);          // owner = the chosen customer
+        Assert.Equal(courtId, detail.Reservation.CourtId);
+        Assert.Equal(SlotPrice, detail.Reservation.TotalPrice);     // server-owned price
+        // The acting admin (not the customer) is recorded as the audit actor.
+        Assert.Equal("Test frontdesk", Assert.Single(detail.Audits).ChangedByName);
+        Assert.Contains(
+            events.Published, e => e.RoutingKey == ReservationRoutingKeys.Created && e.UserId == customer);
+    }
+
+    [Fact]
+    public async Task CreateForUserAsync_blocks_a_deactivated_customer()
+    {
+        await using var db = NewDb();
+        var (_, slotId) = await SeedCourtWithSlotAsync(db);
+        var inactive = Guid.NewGuid();
+        db.Users.Add(new AppUser
+        {
+            Id = inactive,
+            FirstName = "In",
+            LastName = "Active",
+            Email = "inactive@courtly.test",
+            UserName = "inactive",
+            IsActive = false,
+            CreatedAtUtc = Now,
+        });
+        await db.SaveChangesAsync();
+        var (svc, _) = NewService(db, await SeedUserAsync(db, "desk2"), roles: new[] { Roles.Admin });
+
+        await Assert.ThrowsAsync<BusinessException>(
+            () => svc.CreateForUserAsync(new AdminCreateReservationRequest(slotId, inactive)));
+    }
+
+    [Fact]
+    public async Task CreateForUserAsync_missing_user_throws_NotFound()
+    {
+        await using var db = NewDb();
+        var (_, slotId) = await SeedCourtWithSlotAsync(db);
+        var (svc, _) = NewService(db, await SeedUserAsync(db, "desk3"), roles: new[] { Roles.Admin });
+
+        await Assert.ThrowsAsync<NotFoundException>(
+            () => svc.CreateForUserAsync(new AdminCreateReservationRequest(slotId, Guid.NewGuid())));
+    }
+
+    // --- Reschedule (feature 15) ----------------------------------------------------------------
+
+    [Fact]
+    public async Task RescheduleAsync_moves_to_a_new_free_slot_reprices_and_frees_the_old_slot()
+    {
+        await using var db = NewDb();
+        var (courtId, slotId) = await SeedCourtWithSlotAsync(db);
+        // A second free slot at a different price (the court is always derived from the slot).
+        var (court2, slot2) = await SeedCourtWithSlotAsync(db, slotStart: Now.AddHours(4), price: 80m);
+        var owner = await SeedUserAsync(db, "mover");
+        var rid = await InsertReservationAsync(db, owner, courtId, slotId, ReservationStatus.Confirmed);
+        var (svc, events) = NewService(db, await SeedUserAsync(db, "admin6"), roles: new[] { Roles.Admin });
+
+        var detail = await svc.RescheduleAsync(rid, new RescheduleReservationRequest(slot2));
+
+        Assert.Equal(slot2, detail.Reservation.TimeSlotId);
+        Assert.Equal(court2, detail.Reservation.CourtId);
+        Assert.Equal(80m, detail.Reservation.TotalPrice);                       // re-priced from the new slot
+        Assert.Equal(ReservationStatus.Confirmed, detail.Reservation.Status);   // status is unchanged by a reschedule
+        Assert.Contains(detail.Audits, a => a.Reason != null && a.Reason.Contains("Rescheduled"));
+        Assert.Contains(events.Published, e => e.RoutingKey == ReservationRoutingKeys.Rescheduled);
+
+        // The old slot is freed — a different user can book it.
+        var other = await SeedUserAsync(db, "rebook");
+        var (otherSvc, _) = NewService(db, other);
+        var rebooked = await otherSvc.CreateAsync(new CreateReservationRequest(slotId));
+        Assert.Equal(ReservationStatus.Pending, rebooked.Reservation.Status);
+    }
+
+    [Fact]
+    public async Task RescheduleAsync_rejects_a_terminal_reservation()
+    {
+        await using var db = NewDb();
+        var (courtId, slotId) = await SeedCourtWithSlotAsync(db);
+        var (_, slot2) = await SeedCourtWithSlotAsync(db, slotStart: Now.AddHours(4));
+        var owner = await SeedUserAsync(db, "terminal");
+        var rid = await InsertReservationAsync(db, owner, courtId, slotId, ReservationStatus.Cancelled);
+        var (svc, _) = NewService(db, await SeedUserAsync(db, "admin7"), roles: new[] { Roles.Admin });
+
+        await Assert.ThrowsAsync<BusinessException>(
+            () => svc.RescheduleAsync(rid, new RescheduleReservationRequest(slot2)));
+    }
+
+    [Fact]
+    public async Task RescheduleAsync_blocks_a_paid_reservation()
+    {
+        await using var db = NewDb();
+        var (courtId, slotId) = await SeedCourtWithSlotAsync(db);
+        var (_, slot2) = await SeedCourtWithSlotAsync(db, slotStart: Now.AddHours(4));
+        var owner = await SeedUserAsync(db, "paidmover");
+        var rid = await InsertReservationAsync(db, owner, courtId, slotId, ReservationStatus.Confirmed, paid: true);
+        var (svc, _) = NewService(db, await SeedUserAsync(db, "admin8"), roles: new[] { Roles.Admin });
+
+        await Assert.ThrowsAsync<BusinessException>(
+            () => svc.RescheduleAsync(rid, new RescheduleReservationRequest(slot2)));
+    }
+
+    [Fact]
+    public async Task RescheduleAsync_blocks_when_the_target_slot_is_taken()
+    {
+        await using var db = NewDb();
+        var (courtId, slotId) = await SeedCourtWithSlotAsync(db);
+        var (court2, slot2) = await SeedCourtWithSlotAsync(db, slotStart: Now.AddHours(4));
+        var owner = await SeedUserAsync(db, "movee");
+        var rid = await InsertReservationAsync(db, owner, courtId, slotId, ReservationStatus.Pending);
+        // The target slot is already held by someone else.
+        var holder = await SeedUserAsync(db, "holder2");
+        await InsertReservationAsync(db, holder, court2, slot2, ReservationStatus.Confirmed);
+        var (svc, _) = NewService(db, await SeedUserAsync(db, "admin9"), roles: new[] { Roles.Admin });
+
+        await Assert.ThrowsAsync<ConflictException>(
+            () => svc.RescheduleAsync(rid, new RescheduleReservationRequest(slot2)));
+    }
+
+    [Fact]
+    public async Task RescheduleAsync_rejects_moving_to_the_same_slot()
+    {
+        await using var db = NewDb();
+        var (courtId, slotId) = await SeedCourtWithSlotAsync(db);
+        var owner = await SeedUserAsync(db, "sameslot");
+        var rid = await InsertReservationAsync(db, owner, courtId, slotId, ReservationStatus.Pending);
+        var (svc, _) = NewService(db, await SeedUserAsync(db, "admin10"), roles: new[] { Roles.Admin });
+
+        await Assert.ThrowsAsync<BusinessException>(
+            () => svc.RescheduleAsync(rid, new RescheduleReservationRequest(slotId)));
+    }
 }

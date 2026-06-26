@@ -67,14 +67,42 @@ public sealed class ReservationService : IReservationService
         _holdMinutes = Math.Max(1, options.Value.HoldMinutes); // read env once in ctor (rubric §8.2)
     }
 
-    public async Task<ReservationDetailDto> CreateAsync(CreateReservationRequest request, CancellationToken ct = default)
+    public Task<ReservationDetailDto> CreateAsync(CreateReservationRequest request, CancellationToken ct = default) =>
+        // The client books for itself — the owner is the caller (rubric §5: never from the route/body).
+        CreateCoreAsync(request.TimeSlotId, CurrentUserId(), ct);
+
+    public async Task<ReservationDetailDto> CreateForUserAsync(
+        AdminCreateReservationRequest request, CancellationToken ct = default)
     {
-        var userId = CurrentUserId();
+        // Admin/staff manual booking on a customer's behalf (rubric §5 allows acting on other users' data). Validate
+        // the target user exists and is active; the acting admin is still recorded as the audit actor (NewAudit reads
+        // ICurrentUser, which is the admin here).
+        var owner = await _db.Users.AsNoTracking()
+            .Where(u => u.Id == request.UserId)
+            .Select(u => new { u.Id, u.IsActive })
+            .FirstOrDefaultAsync(ct)
+            ?? throw new NotFoundException($"User {request.UserId} was not found.");
+
+        if (!owner.IsActive)
+        {
+            throw new BusinessException("This user is deactivated; a booking cannot be created for them.");
+        }
+
+        return await CreateCoreAsync(request.TimeSlotId, owner.Id, ct);
+    }
+
+    /// <summary>The shared create path used by both the client booking (<see cref="CreateAsync"/>) and the admin
+    /// manual booking (<see cref="CreateForUserAsync"/>): loads the slot + its court, runs the server-side
+    /// preconditions (active/past/maintenance/overlap), inserts the Pending reservation + its first audit row in one
+    /// SaveChanges, and publishes <c>reservation.created</c>. <paramref name="ownerUserId"/> is the booking's owner;
+    /// the audit actor is always the current user.</summary>
+    private async Task<ReservationDetailDto> CreateCoreAsync(long timeSlotId, Guid ownerUserId, CancellationToken ct)
+    {
         var now = _clock.UtcNow;
 
         // The slot + its court — the server derives the court from the slot (never a client-supplied court id).
         var slot = await _db.TimeSlots.AsNoTracking()
-            .Where(s => s.Id == request.TimeSlotId)
+            .Where(s => s.Id == timeSlotId)
             .Select(s => new
             {
                 s.Id,
@@ -86,7 +114,7 @@ public sealed class ReservationService : IReservationService
                 CourtActive = s.Court.IsActive,
             })
             .FirstOrDefaultAsync(ct)
-            ?? throw new NotFoundException($"Time slot {request.TimeSlotId} was not found.");
+            ?? throw new NotFoundException($"Time slot {timeSlotId} was not found.");
 
         if (!slot.SlotActive)
         {
@@ -119,7 +147,7 @@ public sealed class ReservationService : IReservationService
 
         var reservation = new Reservation
         {
-            UserId = userId,
+            UserId = ownerUserId,
             CourtId = slot.CourtId,
             TimeSlotId = slot.Id,
             Status = ReservationStatus.Pending,
@@ -150,7 +178,7 @@ public sealed class ReservationService : IReservationService
         await PublishAsync(ReservationRoutingKeys.Created, reservation, slot.StartUtc, slot.EndUtc, reason: null, ct);
         _logger.LogInformation(
             "Created reservation {ReservationId} (user {UserId}, court {CourtId}, slot {SlotId}).",
-            reservation.Id, userId, slot.CourtId, slot.Id);
+            reservation.Id, ownerUserId, slot.CourtId, slot.Id);
 
         return await ProjectDetailAsync(reservation.Id, ct);
     }
@@ -242,6 +270,115 @@ public sealed class ReservationService : IReservationService
             ReservationRoutingKeys.Completed, reservation, reservation.TimeSlot.StartUtc, reservation.TimeSlot.EndUtc,
             reason: null, ct);
         _logger.LogInformation("Completed reservation {ReservationId}.", id);
+
+        return await ProjectDetailAsync(id, ct);
+    }
+
+    public async Task<ReservationDetailDto> RescheduleAsync(
+        long id, RescheduleReservationRequest request, CancellationToken ct = default)
+    {
+        var reservation = await _db.Reservations
+            .Include(r => r.TimeSlot)
+            .Include(r => r.Payment)
+            .FirstOrDefaultAsync(r => r.Id == id, ct)
+            ?? throw new NotFoundException($"Reservation {id} was not found.");
+
+        // Only an active (Pending/Confirmed) reservation holds a slot and can be moved; terminal ones are immutable.
+        if (!ReservationStateMachine.IsActive(reservation.Status))
+        {
+            throw new BusinessException(
+                $"A {StatusLabel(reservation.Status).ToLowerInvariant()} reservation can't be rescheduled.");
+        }
+
+        // A paid booking would need a payment adjustment to move to a differently-priced slot (feature 16) — block it,
+        // mirroring the paid-cancel guard.
+        if (reservation.Payment is { Status: PaymentStatus.Succeeded })
+        {
+            throw new BusinessException(
+                "This reservation has been paid; rescheduling it would require a payment adjustment.");
+        }
+
+        if (request.NewTimeSlotId == reservation.TimeSlotId)
+        {
+            throw new BusinessException("This reservation is already booked into that time slot.");
+        }
+
+        var now = _clock.UtcNow;
+
+        // The target slot + its court — same server-derived shape as create (never a client-supplied court id).
+        var newSlot = await _db.TimeSlots.AsNoTracking()
+            .Where(s => s.Id == request.NewTimeSlotId)
+            .Select(s => new
+            {
+                s.Id,
+                s.CourtId,
+                s.StartUtc,
+                s.EndUtc,
+                s.Price,
+                SlotActive = s.IsActive,
+                CourtActive = s.Court.IsActive,
+            })
+            .FirstOrDefaultAsync(ct)
+            ?? throw new NotFoundException($"Time slot {request.NewTimeSlotId} was not found.");
+
+        // Re-run the create preconditions on the target slot (rubric §7: server-side availability + preconditions).
+        if (!newSlot.SlotActive)
+        {
+            throw new BusinessException("This time slot is no longer available for booking.");
+        }
+
+        if (!newSlot.CourtActive)
+        {
+            throw new BusinessException("This court is not currently available for booking.");
+        }
+
+        if (newSlot.StartUtc <= now)
+        {
+            throw new BusinessException("This time slot is in the past and can no longer be booked.");
+        }
+
+        var underMaintenance = await _maintenance.GetCourtIdsUnderMaintenanceAsync(newSlot.StartUtc, newSlot.EndUtc, ct);
+        if (underMaintenance.Contains(newSlot.CourtId))
+        {
+            throw new BusinessException(
+                "This court is under maintenance for the selected time and can't be booked.");
+        }
+
+        // Overlap pre-check on the target slot (excluding this reservation); the filtered-unique index is the hard
+        // guard for the concurrent race when the UPDATE moves the row onto the new slot.
+        if (await ActiveReservationExistsAsync(newSlot.Id, excludeReservationId: reservation.Id, ct))
+        {
+            throw new ConflictException("This slot was just taken. Please pick another time.");
+        }
+
+        var fromStartUtc = reservation.TimeSlot.StartUtc;
+        reservation.TimeSlotId = newSlot.Id;
+        reservation.CourtId = newSlot.CourtId; // court is always derived from the slot
+        reservation.TotalPrice = newSlot.Price; // re-price from the new slot (server-owned, rubric §7.1)
+        var reason =
+            $"Rescheduled from {fromStartUtc:yyyy-MM-dd HH:mm} UTC to {newSlot.StartUtc:yyyy-MM-dd HH:mm} UTC.";
+        // The status is unchanged by a reschedule, so the audit row records old == new with the move recorded in the
+        // reason (the frontend renders an old == new audit as "Rescheduled").
+        reservation.Audits.Add(NewAudit(reservation.Status, reservation.Status, reason, now));
+
+        try
+        {
+            await _db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException)
+        {
+            if (await ActiveReservationExistsAsync(newSlot.Id, excludeReservationId: reservation.Id, ct))
+            {
+                throw new ConflictException("This slot was just taken. Please pick another time.");
+            }
+
+            throw;
+        }
+
+        // Moving the row off the old slot frees it automatically (the filtered-unique guard only counts active rows).
+        await PublishAsync(
+            ReservationRoutingKeys.Rescheduled, reservation, newSlot.StartUtc, newSlot.EndUtc, reason, ct);
+        _logger.LogInformation("Rescheduled reservation {ReservationId} to slot {SlotId}.", id, newSlot.Id);
 
         return await ProjectDetailAsync(id, ct);
     }

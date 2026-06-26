@@ -13,6 +13,7 @@ public static class ReservationRoutingKeys
     public const string Confirmed = "reservation.confirmed";
     public const string Cancelled = "reservation.cancelled";
     public const string Completed = "reservation.completed";
+    public const string Rescheduled = "reservation.rescheduled";
 }
 
 /// <summary>

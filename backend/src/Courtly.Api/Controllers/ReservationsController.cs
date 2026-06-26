@@ -43,6 +43,14 @@ public sealed class ReservationsController : ControllerBase
     public async Task<ActionResult<ReservationDetailDto>> Create(CreateReservationRequest request, CancellationToken ct)
         => Ok(await _reservations.CreateAsync(request, ct));
 
+    /// <summary>Admin/staff manual booking on a customer's behalf (feature 15 "+ New Booking"): same server-owned
+    /// price/overlap/maintenance checks, but the owner is the supplied (validated, active) user.</summary>
+    [Authorize(Roles = AdminOrStaff)]
+    [HttpPost("admin")]
+    public async Task<ActionResult<ReservationDetailDto>> CreateForUser(
+        AdminCreateReservationRequest request, CancellationToken ct)
+        => Ok(await _reservations.CreateForUserAsync(request, ct));
+
     /// <summary>The caller's own reservations (filtered + paginated).</summary>
     [HttpGet("mine")]
     public async Task<ActionResult<PagedResult<ReservationDto>>> Mine(
@@ -79,4 +87,12 @@ public sealed class ReservationsController : ControllerBase
     [HttpPost("{id:long}/complete")]
     public async Task<ActionResult<ReservationDetailDto>> Complete(long id, CancellationToken ct)
         => Ok(await _reservations.CompleteAsync(id, ct));
+
+    /// <summary>Moves a non-terminal, unpaid reservation to a different free slot (admin/staff): re-checks overlap and
+    /// the other preconditions server-side and re-prices from the new slot.</summary>
+    [Authorize(Roles = AdminOrStaff)]
+    [HttpPost("{id:long}/reschedule")]
+    public async Task<ActionResult<ReservationDetailDto>> Reschedule(
+        long id, RescheduleReservationRequest request, CancellationToken ct)
+        => Ok(await _reservations.RescheduleAsync(id, request, ct));
 }

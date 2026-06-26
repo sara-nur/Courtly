@@ -85,8 +85,6 @@ class _SlotsModalState extends ConsumerState<_SlotsModal> {
 
   static DateTime _dateOnly(DateTime d) => DateTime(d.year, d.month, d.day);
 
-  static String _hourLabel(int hour) => '${hour.toString().padLeft(2, '0')}:00';
-
   void _refreshDay() => ref.invalidate(slotAvailabilityProvider(_dayKey));
 
   // --- Generate -------------------------------------------------------------

@@ -1,4 +1,3 @@
-import 'package:courtly/core/network/api_exception.dart';
 import 'package:courtly/core/theme/app_theme.dart';
 import 'package:courtly/core/widgets/db_dropdown.dart';
 import 'package:courtly/features/reference_data/application/reference_providers.dart';

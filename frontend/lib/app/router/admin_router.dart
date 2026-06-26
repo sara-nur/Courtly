@@ -9,6 +9,8 @@ import '../../features/auth/presentation/login_screen.dart';
 import '../../features/court_catalog/presentation/courts_screen.dart';
 import '../../features/placeholders/feature_placeholder.dart';
 import '../../features/reference_data/presentation/settings_screen.dart';
+import '../../features/reservations/presentation/reservation_detail_screen.dart';
+import '../../features/reservations/presentation/reservations_screen.dart';
 import '../shell/admin_shell.dart';
 
 /// Admin route paths (single source — rubric §3.4: no scattered string literals).
@@ -21,6 +23,11 @@ abstract final class AdminRoutes {
   static const String users = '/users';
   static const String reports = '/reports';
   static const String settings = '/settings';
+
+  /// Path-parameter segment for the reservation detail route (child of
+  /// [reservations]) and the full path for a given reservation id.
+  static const String reservationDetailParam = ':id';
+  static String reservationDetail(int id) => '$reservations/$id';
 }
 
 /// Builds the admin desktop router with an auth guard. The redirect reads the
@@ -73,13 +80,25 @@ final adminRouterProvider = Provider<GoRouter>((ref) {
               icon: Icons.dashboard_outlined,
             ),
           ),
-          _branch(
-            AdminRoutes.reservations,
-            const FeaturePlaceholder(
-              title: 'Reservation Management',
-              subtitle: 'View and manage all court bookings.',
-              icon: Icons.event_note_outlined,
-            ),
+          // Reservations: the list at /reservations with a full-screen detail
+          // route at /reservations/:id (kept inside the branch so the admin
+          // shell + nav stay; back returns to the list).
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: AdminRoutes.reservations,
+                builder: (context, state) => const ReservationsScreen(),
+                routes: [
+                  GoRoute(
+                    path: AdminRoutes.reservationDetailParam,
+                    builder: (context, state) => ReservationDetailScreen(
+                      reservationId:
+                          int.parse(state.pathParameters['id'] ?? '0'),
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ),
           _branch(AdminRoutes.courts, const CourtsScreen()),
           _branch(
