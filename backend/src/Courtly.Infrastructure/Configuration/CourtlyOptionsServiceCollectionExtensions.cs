@@ -68,6 +68,10 @@ public static class CourtlyOptionsServiceCollectionExtensions
                 o.AllowedCorsOrigins = ParseCsv(config["CORS_ALLOWED_ORIGINS"]);
             });
 
+        // Feature 14: how long an unpaid Pending reservation holds its slot (the Worker releases expired holds in F17).
+        services.AddOptions<ReservationOptions>()
+            .Configure(o => o.HoldMinutes = ParseInt(config["RESERVATION_HOLD_MINUTES"], 15));
+
         return services;
     }
 
