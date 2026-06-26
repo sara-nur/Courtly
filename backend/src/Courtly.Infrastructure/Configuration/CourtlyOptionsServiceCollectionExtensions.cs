@@ -4,9 +4,9 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Courtly.Infrastructure.Configuration;
 
 /// <summary>
-/// Binds the six Courtly option groups from flat <c>.env</c> keys to strongly-typed options.
-/// Db and Rabbit are required by feature 2, so they are validated on startup; Jwt/Stripe/Smtp/Api
-/// are bound now but validated by their own features (5/16/17/18) once those subsystems come online.
+/// Binds the Courtly option groups from flat <c>.env</c> keys to strongly-typed options.
+/// Db/Rabbit (feature 2), Jwt (feature 5) and Stripe (feature 16) are validated on startup;
+/// Smtp/Api are bound now but validated by their own features (17/18) once those subsystems come online.
 /// </summary>
 public static class CourtlyOptionsServiceCollectionExtensions
 {
@@ -48,7 +48,13 @@ public static class CourtlyOptionsServiceCollectionExtensions
                 o.SecretKey = config["STRIPE_SECRET_KEY"] ?? string.Empty;
                 o.PublishableKey = config["STRIPE_PUBLISHABLE_KEY"] ?? string.Empty;
                 o.WebhookSecret = config["STRIPE_WEBHOOK_SECRET"] ?? string.Empty;
-            });
+                o.Currency = config["STRIPE_CURRENCY"] is { Length: > 0 } c ? c : "usd";
+            })
+            // Feature 16 brings payments online: the server can't create intents without the secret key, nor verify
+            // webhooks without the signing secret. The publishable key is client-facing and not required to start.
+            .Validate(o => !string.IsNullOrWhiteSpace(o.SecretKey), "STRIPE_SECRET_KEY is required.")
+            .Validate(o => !string.IsNullOrWhiteSpace(o.WebhookSecret), "STRIPE_WEBHOOK_SECRET is required.")
+            .ValidateOnStart();
 
         services.AddOptions<SmtpOptions>()
             .Configure(o =>
