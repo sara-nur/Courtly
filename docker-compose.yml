@@ -81,6 +81,8 @@ services:
       # Override host-local values from .env with in-network service names (same as the api service).
       DB_CONNECTION_STRING: Host=postgres;Port=5432;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
       RABBITMQ_HOST: rabbitmq
+      # Point the worker at the in-network API (feature 18 internal push); localhost:5000 would not resolve inside the container.
+      API_BASE_URL: http://api:8080
       # Point the worker at the in-stack Mailpit catcher (plain SMTP on 1025, no TLS) regardless of .env values.
       SMTP_HOST: mailpit
       SMTP_PORT: "1025"

@@ -2,8 +2,10 @@
 // feature-6 cross-cutting stack (exception middleware, validation pipeline, memory cache, CORS-once,
 // current-user accessor), applies migrations + seeds on startup, and exposes the auth API behind Swagger.
 using System.IdentityModel.Tokens.Jwt;
+using Courtly.Api.Authorization;
 using Courtly.Api.Identity;
 using Courtly.Api.Middleware;
+using Courtly.Api.Realtime;
 using Courtly.Api.Validation;
 using Courtly.Application.Abstractions;
 using Courtly.Application.Common.Validation;
@@ -15,6 +17,7 @@ using Courtly.Infrastructure.Persistence;
 using Courtly.Infrastructure.Persistence.Seeding;
 using FluentValidation;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -101,6 +104,12 @@ builder.Services.AddCourtlyUsers();           // feature 15 admin user lookup (1
 builder.Services.AddCourtlyPayments();        // feature 16 Stripe payments (intent + webhook + refund)
 builder.Services.AddRabbitMqConnection();     // F17: shared singleton RabbitMQ connection
 builder.Services.AddRabbitMqMessaging();      // F17: real publisher REPLACES the logging stubs (rubric §3.2 — main service publishes to RabbitMQ)
+builder.Services.AddCourtlyNotificationService(); // F18: user-facing in-app notification inbox
+builder.Services.AddSignalR();                // F18: real-time notification push hub
+
+// F18: stateless verifier for the "InternalKey" policy — the Worker authenticates to /api/internal/push on the
+// shared X-Internal-Key secret alone (no JWT). Singleton: it holds no per-request state.
+builder.Services.AddSingleton<IAuthorizationHandler, InternalKeyAuthorizationHandler>();
 
 builder.Services
     .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
@@ -133,11 +142,26 @@ builder.Services
                     context.Fail("Token has been revoked.");
                 }
             },
-            // F18: add OnMessageReceived here to read access_token from the query string for the SignalR hub.
+            // F18: WebSocket handshakes cannot set an Authorization header, so the SignalR client passes the JWT in
+            // the access_token query string. Lift it onto context.Token only for the notifications hub path.
+            OnMessageReceived = context =>
+            {
+                var accessToken = context.Request.Query["access_token"];
+                var path = context.HttpContext.Request.Path;
+                if (!string.IsNullOrEmpty(accessToken) && path.StartsWithSegments("/hubs/notifications"))
+                {
+                    context.Token = accessToken;
+                }
+
+                return Task.CompletedTask;
+            },
         };
     });
 
-builder.Services.AddAuthorization();
+// F18: "InternalKey" gates the Worker -> API push endpoint. It deliberately does NOT RequireAuthenticatedUser — the
+// JWT-less Worker passes on the shared X-Internal-Key secret alone (verified by InternalKeyAuthorizationHandler).
+builder.Services.AddAuthorization(options =>
+    options.AddPolicy("InternalKey", policy => policy.AddRequirements(new InternalKeyRequirement())));
 
 var app = builder.Build();
 
@@ -165,5 +189,6 @@ app.UseAuthorization();
 app.MapGet("/", () => "Courtly API");
 app.MapHealthChecks("/health");
 app.MapControllers();
+app.MapHub<NotificationHub>("/hubs/notifications");   // F18: real-time notification channel
 
 app.Run();

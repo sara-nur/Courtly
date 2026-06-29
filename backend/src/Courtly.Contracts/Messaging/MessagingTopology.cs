@@ -33,11 +33,41 @@ public static class MessagingTopology
     /// <summary>Durable queue holding exhausted email messages for manual inspection.</summary>
     public const string EmailDeadLetterQueue = "q.email.dlq";
 
+    /// <summary>Durable queue feeding the notification consumer (feature 18); dead-letters to <see cref="NotificationDeadLetterExchange"/>.</summary>
+    public const string NotificationQueue = "q.notifications";
+
+    /// <summary>
+    /// Durable fanout exchange that receives dead-lettered notification messages. The notification queue has its OWN
+    /// dead-letter exchange (separate from the email <see cref="DeadLetterExchange"/>): the email DLX is fanout, so a
+    /// second DLQ bound to it would also receive the email queue's dead-letters and vice-versa — a dedicated exchange
+    /// keeps each consumer's poison/exhausted messages in its own inspection queue.
+    /// </summary>
+    public const string NotificationDeadLetterExchange = "courtly.events.notifications.dlx";
+
+    /// <summary>Durable queue holding exhausted notification messages for manual inspection.</summary>
+    public const string NotificationDeadLetterQueue = "q.notifications.dlq";
+
     /// <summary>Routing keys the <see cref="EmailQueue"/> binds — the events that trigger a customer email.</summary>
     public static readonly string[] EmailBindingKeys =
     {
         ReservationRoutingKeys.Confirmed,
         ReservationRoutingKeys.Cancelled,
+        PaymentRoutingKeys.Refunded,
+    };
+
+    /// <summary>
+    /// Routing keys the <see cref="NotificationQueue"/> binds — every reservation/payment event that produces a
+    /// persisted in-app notification (feature 18). Unlike <see cref="EmailBindingKeys"/> this binds the full lifecycle
+    /// (including <c>reservation.created</c>/<c>reservation.completed</c> and <c>payment.succeeded</c>): an in-app
+    /// notification per event does not risk the double-email problem that omits those keys from the email queue.
+    /// </summary>
+    public static readonly string[] NotificationBindingKeys =
+    {
+        ReservationRoutingKeys.Created,
+        ReservationRoutingKeys.Confirmed,
+        ReservationRoutingKeys.Cancelled,
+        ReservationRoutingKeys.Completed,
+        PaymentRoutingKeys.Succeeded,
         PaymentRoutingKeys.Refunded,
     };
 

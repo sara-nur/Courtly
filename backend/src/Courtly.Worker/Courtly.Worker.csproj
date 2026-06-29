@@ -4,7 +4,9 @@
 
   <ItemGroup>
     <!-- Worker SDK has no shared framework; the generic host types come from this package. -->
-    <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.8" />
+    <!-- Feature 18: typed HttpClient (AddHttpClient) for the API internal SignalR push endpoint. -->
+    <PackageReference Include="Microsoft.Extensions.Http" Version="10.0.8" />
     <!-- RabbitMQ broker connection (feature 2 baseline; full consumer in feature 17). -->
     <PackageReference Include="RabbitMQ.Client" Version="7.0.0" />
   </ItemGroup>
