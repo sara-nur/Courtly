@@ -33,6 +33,16 @@ internal sealed class RecordingEmailSender : IEmailSender
         LastToken = resetToken;
         return Task.CompletedTask;
     }
+
+    // Booking emails (feature 17) aren't exercised by the auth tests — no-op to satisfy the interface.
+    public Task SendBookingConfirmedAsync(string toEmail, string userName, string courtName, DateTime startUtc, DateTime endUtc, decimal totalPrice, CancellationToken ct = default) =>
+        Task.CompletedTask;
+
+    public Task SendBookingCancelledAsync(string toEmail, string userName, string courtName, DateTime startUtc, DateTime endUtc, string? reason, CancellationToken ct = default) =>
+        Task.CompletedTask;
+
+    public Task SendPaymentRefundedAsync(string toEmail, string userName, string courtName, decimal amount, CancellationToken ct = default) =>
+        Task.CompletedTask;
 }
 
 /// <summary>

@@ -1,89 +1,48 @@
-using Courtly.Infrastructure.Configuration;
+using Courtly.Infrastructure.Messaging;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
-using RabbitMQ.Client;
 
 namespace Courtly.Worker;
 
 /// <summary>
-/// Feature 2 baseline: opens a single RabbitMQ connection on startup (with backoff retry) so the Worker
-/// container is provably wired to the broker, and refreshes a liveness file the Docker healthcheck reads.
-/// The full consumer (queues, DLX, email/notification handlers) arrives in feature 17 and will move the
-/// connection into Infrastructure as the shared publisher/consumer.
+/// Feature 17: the Worker no longer owns its own connection — it reuses the shared
+/// <see cref="IRabbitMqConnection"/> (backoff retry + automatic recovery live there) so the process has a
+/// single broker connection. On startup it eagerly opens that connection (a bad broker fails fast and is
+/// logged), then refreshes a liveness file the Docker healthcheck reads.
 /// </summary>
 public sealed class RabbitMqConnectionService : BackgroundService
 {
     private const string LivenessFilePath = "/tmp/worker-healthy";
     private static readonly TimeSpan LivenessInterval = TimeSpan.FromSeconds(15);
-    private static readonly TimeSpan[] RetryBackoff =
-    [
-        TimeSpan.FromSeconds(1),
-        TimeSpan.FromSeconds(2),
-        TimeSpan.FromSeconds(4),
-        TimeSpan.FromSeconds(8),
-    ];
 
-    private readonly RabbitOptions _options;
+    private readonly IRabbitMqConnection _connection;
     private readonly ILogger<RabbitMqConnectionService> _logger;
-    private IConnection? _connection;
 
-    public RabbitMqConnectionService(IOptions<RabbitOptions> options, ILogger<RabbitMqConnectionService> logger)
+    public RabbitMqConnectionService(IRabbitMqConnection connection, ILogger<RabbitMqConnectionService> logger)
     {
-        _options = options.Value;
+        _connection = connection;
         _logger = logger;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        _connection = await ConnectWithRetryAsync(stoppingToken);
-        _logger.LogInformation(
-            "Connected to RabbitMQ at {Host}:{Port}.", _options.Host, _options.Port);
+        // Eager connect: prove the Worker is wired to the broker (backoff retry lives in RabbitMqConnection).
+        try
+        {
+            var connection = await _connection.GetConnectionAsync(stoppingToken);
+            _logger.LogInformation(
+                "Connected to RabbitMQ at {Endpoint}.", connection.Endpoint);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _logger.LogCritical(ex, "Failed to connect to RabbitMQ after retries; stopping Worker.");
+            throw;
+        }
 
         while (!stoppingToken.IsCancellationRequested)
         {
-            if (_connection.IsOpen)
-            {
-                await RefreshLivenessAsync(stoppingToken);
-            }
-            else
-            {
-                _logger.LogWarning("RabbitMQ connection is not open; awaiting automatic recovery.");
-            }
-
+            await RefreshLivenessAsync(stoppingToken);
             await DelayAsync(LivenessInterval, stoppingToken);
-        }
-    }
-
-    private async Task<IConnection> ConnectWithRetryAsync(CancellationToken stoppingToken)
-    {
-        var factory = new ConnectionFactory
-        {
-            HostName = _options.Host,
-            Port = _options.Port,
-            UserName = _options.User,
-            Password = _options.Password,
-            AutomaticRecoveryEnabled = true,
-        };
-
-        var attempt = 0;
-        while (true)
-        {
-            stoppingToken.ThrowIfCancellationRequested();
-            try
-            {
-                return await factory.CreateConnectionAsync(stoppingToken);
-            }
-            catch (Exception ex)
-            {
-                var delay = RetryBackoff[Math.Min(attempt, RetryBackoff.Length - 1)];
-                attempt++;
-                _logger.LogWarning(
-                    ex,
-                    "RabbitMQ connection attempt {Attempt} to {Host}:{Port} failed; retrying in {Delay}s.",
-                    attempt, _options.Host, _options.Port, delay.TotalSeconds);
-                await DelayAsync(delay, stoppingToken);
-            }
         }
     }
 
@@ -101,12 +60,7 @@ public sealed class RabbitMqConnectionService : BackgroundService
 
     public override async Task StopAsync(CancellationToken cancellationToken)
     {
-        if (_connection is not null)
-        {
-            await _connection.CloseAsync(cancellationToken);
-            await _connection.DisposeAsync();
-        }
-
+        // The shared connection is owned by DI (singleton); do not dispose it here.
         TryDeleteLivenessFile();
         await base.StopAsync(cancellationToken);
     }

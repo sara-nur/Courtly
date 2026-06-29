@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!-- CourtlyDbContext, EF configs, migrations, seed, RabbitMQ publisher, Stripe client, SMTP sender. -->
+  <!-- CourtlyDbContext, EF configs, migrations, seed, RabbitMQ connection + publisher, Stripe client. -->
 
   <ItemGroup>
     <!-- .env loader (feature 2) + typed-options binding/validation. -->
@@ -11,6 +11,12 @@
   <ItemGroup>
     <!-- Feature 16: Stripe server-side payments (PaymentIntent create, webhook HMAC verify, refund). -->
     <PackageReference Include="Stripe.net" Version="52.1.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Feature 17: RabbitMQ.Client = real domain-event publisher (API/Worker). The SMTP sender (MailKit) lives in
+         the Application layer beside IEmailSender. -->
+    <PackageReference Include="RabbitMQ.Client" Version="7.0.0" />
   </ItemGroup>
 
   <ItemGroup>

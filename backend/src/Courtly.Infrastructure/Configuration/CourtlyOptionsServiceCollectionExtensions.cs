@@ -60,11 +60,17 @@ public static class CourtlyOptionsServiceCollectionExtensions
             .Configure(o =>
             {
                 o.Host = config["SMTP_HOST"] ?? string.Empty;
-                o.Port = ParseInt(config["SMTP_PORT"], 2525);
+                o.Port = ParseInt(config["SMTP_PORT"], 1025);
                 o.User = config["SMTP_USER"] ?? string.Empty;
                 o.Password = config["SMTP_PASSWORD"] ?? string.Empty;
                 o.From = config["SMTP_FROM"] ?? string.Empty;
-            });
+                o.UseStartTls = ParseBool(config["SMTP_USE_SSL"], true);
+            })
+            // Feature 17 brings worker email online. Validate only Host + From: the API uses the logging sender and
+            // must still boot when SMTP creds are blank (Mailpit needs none; a hosted sandbox would fill them); any
+            // bad creds surface at send time in the Worker (logged → DLQ).
+            .Validate(o => !string.IsNullOrWhiteSpace(o.Host) && !string.IsNullOrWhiteSpace(o.From), "SMTP_HOST and SMTP_FROM are required.")
+            .ValidateOnStart();
 
         services.AddOptions<ApiOptions>()
             .Configure(o =>
@@ -76,13 +82,20 @@ public static class CourtlyOptionsServiceCollectionExtensions
 
         // Feature 14: how long an unpaid Pending reservation holds its slot (the Worker releases expired holds in F17).
         services.AddOptions<ReservationOptions>()
-            .Configure(o => o.HoldMinutes = ParseInt(config["RESERVATION_HOLD_MINUTES"], 15));
+            .Configure(o =>
+            {
+                o.HoldMinutes = ParseInt(config["RESERVATION_HOLD_MINUTES"], 15);
+                o.HoldScanSeconds = ParseInt(config["RESERVATION_HOLD_SCAN_SECONDS"], 60);
+            });
 
         return services;
     }
 
     private static int ParseInt(string? value, int fallback) =>
         int.TryParse(value, out var parsed) ? parsed : fallback;
+
+    private static bool ParseBool(string? value, bool fallback) =>
+        bool.TryParse(value, out var parsed) ? parsed : fallback;
 
     private static string[] ParseCsv(string? value) =>
         string.IsNullOrWhiteSpace(value)
