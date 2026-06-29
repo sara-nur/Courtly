@@ -18,7 +18,9 @@ public static class RabbitMqTopology
     /// <summary>
     /// Idempotently declares the events topic exchange, the dead-letter fanout exchange, the email queue (dead-lettering
     /// to <see cref="MessagingTopology.DeadLetterExchange"/>) and its dead-letter queue, then binds them per
-    /// <see cref="MessagingTopology.EmailBindingKeys"/>. Safe to call from both the publisher and the consumer.
+    /// <see cref="MessagingTopology.EmailBindingKeys"/>. The notification queue (feature 18) is declared and bound the
+    /// same way per <see cref="MessagingTopology.NotificationBindingKeys"/>. Safe to call from both the publisher and the
+    /// consumer.
     /// </summary>
     public static async Task DeclareAsync(IChannel channel, CancellationToken ct = default)
     {
@@ -56,6 +58,39 @@ public static class RabbitMqTopology
         {
             await channel.QueueBindAsync(
                 MessagingTopology.EmailQueue, MessagingTopology.EventsExchange,
+                routingKey: key, arguments: null, cancellationToken: ct);
+        }
+
+        // Notification queue (feature 18) has its OWN dead-letter exchange so its dead-letters don't cross-contaminate
+        // the email DLQ (the email DLX is fanout and would deliver to every bound queue). Durable fanout DLX.
+        await channel.ExchangeDeclareAsync(
+            MessagingTopology.NotificationDeadLetterExchange, ExchangeType.Fanout,
+            durable: true, autoDelete: false, arguments: null, cancellationToken: ct);
+
+        // Notification queue: durable + dead-lettered to its own DLX so exhausted messages land in the notification DLQ.
+        await channel.QueueDeclareAsync(
+            MessagingTopology.NotificationQueue, durable: true, exclusive: false, autoDelete: false,
+            arguments: new Dictionary<string, object?>
+            {
+                ["x-dead-letter-exchange"] = MessagingTopology.NotificationDeadLetterExchange,
+            },
+            cancellationToken: ct);
+
+        // Durable dead-letter queue holding exhausted notification messages for manual inspection.
+        await channel.QueueDeclareAsync(
+            MessagingTopology.NotificationDeadLetterQueue, durable: true, exclusive: false, autoDelete: false,
+            arguments: null, cancellationToken: ct);
+
+        // The fanout DLX has no routing semantics, so the DLQ binds with the empty routing key.
+        await channel.QueueBindAsync(
+            MessagingTopology.NotificationDeadLetterQueue, MessagingTopology.NotificationDeadLetterExchange,
+            routingKey: string.Empty, arguments: null, cancellationToken: ct);
+
+        // Bind each notification-triggering routing key from the topic exchange to the notification queue.
+        foreach (var key in MessagingTopology.NotificationBindingKeys)
+        {
+            await channel.QueueBindAsync(
+                MessagingTopology.NotificationQueue, MessagingTopology.EventsExchange,
                 routingKey: key, arguments: null, cancellationToken: ct);
         }
     }

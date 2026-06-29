@@ -78,7 +78,11 @@ public static class CourtlyOptionsServiceCollectionExtensions
                 o.BaseUrl = config["API_BASE_URL"] ?? string.Empty;
                 o.InternalPushKey = config["INTERNAL_PUSH_KEY"] ?? string.Empty;
                 o.AllowedCorsOrigins = ParseCsv(config["CORS_ALLOWED_ORIGINS"]);
-            });
+            })
+            // Feature 18 brings the internal SignalR push online: the Worker authenticates to the API's internal push
+            // endpoint with this shared secret, so a blank key would let unauthenticated callers push notifications.
+            .Validate(o => !string.IsNullOrWhiteSpace(o.InternalPushKey), "INTERNAL_PUSH_KEY is required.")
+            .ValidateOnStart();
 
         // Feature 14: how long an unpaid Pending reservation holds its slot (the Worker releases expired holds in F17).
         services.AddOptions<ReservationOptions>()
