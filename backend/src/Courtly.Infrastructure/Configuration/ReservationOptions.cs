@@ -10,4 +10,7 @@ public sealed class ReservationOptions
 {
     /// <summary>Minutes an unpaid Pending hold survives before it can be auto-cancelled. Default 15.</summary>
     public int HoldMinutes { get; set; } = 15;
+
+    /// <summary>How often the Worker scans for expired Pending holds, in seconds. Bound from <c>RESERVATION_HOLD_SCAN_SECONDS</c>; default 60.</summary>
+    public int HoldScanSeconds { get; set; } = 60;
 }

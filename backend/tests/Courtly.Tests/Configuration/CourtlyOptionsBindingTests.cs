@@ -86,7 +86,7 @@ public class CourtlyOptionsBindingTests
         using var provider = BuildProvider(env);
 
         Assert.Equal(15, provider.GetRequiredService<IOptions<JwtOptions>>().Value.AccessMinutes);
-        Assert.Equal(2525, provider.GetRequiredService<IOptions<SmtpOptions>>().Value.Port);
+        Assert.Equal(1025, provider.GetRequiredService<IOptions<SmtpOptions>>().Value.Port);
     }
 
     [Fact]

@@ -8,6 +8,7 @@ WORKDIR /src
 COPY Directory.Build.props ./
 COPY src/Courtly.Domain/Courtly.Domain.csproj src/Courtly.Domain/
 COPY src/Courtly.Contracts/Courtly.Contracts.csproj src/Courtly.Contracts/
+COPY src/Courtly.Application/Courtly.Application.csproj src/Courtly.Application/
 COPY src/Courtly.Infrastructure/Courtly.Infrastructure.csproj src/Courtly.Infrastructure/
 COPY src/Courtly.Worker/Courtly.Worker.csproj src/Courtly.Worker/
 RUN dotnet restore src/Courtly.Worker/Courtly.Worker.csproj
@@ -16,7 +17,9 @@ RUN dotnet restore src/Courtly.Worker/Courtly.Worker.csproj
 COPY . .
 RUN dotnet publish src/Courtly.Worker/Courtly.Worker.csproj -c Release -o /app --no-restore
 
-FROM mcr.microsoft.com/dotnet/runtime:10.0 AS final
+# aspnet (not plain runtime): the Worker references Courtly.Application, which pulls in the ASP.NET Core shared
+# framework (JwtBearer), so the app's runtimeconfig requires Microsoft.AspNetCore.App at runtime.
+FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS final
 WORKDIR /app
 COPY --from=build /app ./
 # The healthcheck (docker-compose.yml) reads the liveness file refreshed by RabbitMqConnectionService.

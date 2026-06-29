@@ -78,12 +78,21 @@ services:
     env_file: .env
     environment:
       DOTNET_ENVIRONMENT: Production
+      # Override host-local values from .env with in-network service names (same as the api service).
+      DB_CONNECTION_STRING: Host=postgres;Port=5432;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
       RABBITMQ_HOST: rabbitmq
+      # Point the worker at the in-stack Mailpit catcher (plain SMTP on 1025, no TLS) regardless of .env values.
+      SMTP_HOST: mailpit
+      SMTP_PORT: "1025"
+      SMTP_USE_SSL: "false"
+      RESERVATION_HOLD_SCAN_SECONDS: "60"
     depends_on:
       rabbitmq:
         condition: service_healthy
       postgres:
         condition: service_healthy
+      mailpit:
+        condition: service_started
     networks:
       - courtly-net
     healthcheck:
@@ -92,6 +101,20 @@ services:
       timeout: 5s
       retries: 5
       start_period: 20s
+
+  mailpit:
+    # Local mail catcher (feature 17): the Worker sends booking emails here; view them at http://localhost:8025.
+    # Self-contained SMTP sandbox — no external account and no creds to ship in the .env zip. Accepts mail with or
+    # without auth so the Worker (which sends without credentials) just works.
+    image: axllent/mailpit:v1.30.3
+    environment:
+      MP_SMTP_AUTH_ACCEPT_ANY: "true"
+      MP_SMTP_AUTH_ALLOW_INSECURE: "true"
+    ports:
+      - "1025:1025"   # SMTP
+      - "8025:8025"   # web UI
+    networks:
+      - courtly-net
 
 volumes:
   postgres-data:

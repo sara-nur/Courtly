@@ -10,6 +10,7 @@ using Courtly.Application.Common.Validation;
 using Courtly.Application.DependencyInjection;
 using Courtly.Domain.Entities;
 using Courtly.Infrastructure.Configuration;
+using Courtly.Infrastructure.DependencyInjection;
 using Courtly.Infrastructure.Persistence;
 using Courtly.Infrastructure.Persistence.Seeding;
 using FluentValidation;
@@ -98,6 +99,8 @@ builder.Services.AddCourtlyCourtCatalog();    // feature 10 court catalog CRUD s
 builder.Services.AddCourtlyReservations();    // feature 14 reservation engine + state machine
 builder.Services.AddCourtlyUsers();           // feature 15 admin user lookup (15A extends)
 builder.Services.AddCourtlyPayments();        // feature 16 Stripe payments (intent + webhook + refund)
+builder.Services.AddRabbitMqConnection();     // F17: shared singleton RabbitMQ connection
+builder.Services.AddRabbitMqMessaging();      // F17: real publisher REPLACES the logging stubs (rubric §3.2 — main service publishes to RabbitMQ)
 
 builder.Services
     .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
