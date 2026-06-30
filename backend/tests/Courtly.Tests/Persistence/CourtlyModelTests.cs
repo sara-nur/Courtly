@@ -38,7 +38,7 @@ public class CourtlyModelTests
             typeof(CourtMaintenanceLog), typeof(TimeSlot), typeof(Reservation), typeof(ReservationAudit),
             typeof(Payment), typeof(Refund), typeof(Review), typeof(Notification),
             typeof(Courtly.Domain.Entities.News),
-            typeof(SearchHistory), typeof(RecommendationFeedback), typeof(Favorite),
+            typeof(Courtly.Domain.Entities.SearchHistory), typeof(RecommendationFeedback), typeof(Favorite),
             typeof(RefreshToken), typeof(RevokedToken), typeof(PasswordResetToken),
         };
 

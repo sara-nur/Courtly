@@ -18,6 +18,18 @@ final newsRepositoryProvider = Provider<NewsRepository>(
 /// Default page size for the news list (single source — no magic numbers).
 const int kNewsPageSize = 20;
 
+/// Page size for the client home feed's published-news preview (single source).
+const int kPublishedNewsPreviewSize = 5;
+
+/// The client home feed: the first page of active, already-published news
+/// (newest-first per the backend), capped at [kPublishedNewsPreviewSize].
+final publishedNewsProvider = FutureProvider<PagedResult<News>>(
+  (ref) => ref.watch(newsRepositoryProvider).listPublished(
+        page: 1,
+        pageSize: kPublishedNewsPreviewSize,
+      ),
+);
+
 /// The admin list's publish filter: all rows, only published, or only hidden.
 /// [value] is the backend `activeOnly` query value (null = no filter).
 enum NewsActiveFilter {

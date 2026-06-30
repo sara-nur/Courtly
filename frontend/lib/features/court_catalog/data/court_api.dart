@@ -43,6 +43,7 @@ class CourtApi {
     bool? isFeatured,
     double? minPrice,
     double? maxPrice,
+    double? minRating,
     bool? underMaintenance,
   }) {
     final query = <String, dynamic>{'page': page, 'pageSize': pageSize};
@@ -58,6 +59,7 @@ class CourtApi {
     if (isFeatured != null) query['isFeatured'] = isFeatured;
     if (minPrice != null) query['minPrice'] = minPrice;
     if (maxPrice != null) query['maxPrice'] = maxPrice;
+    if (minRating != null) query['minRating'] = minRating;
     if (underMaintenance != null) query['underMaintenance'] = underMaintenance;
     return query;
   }
@@ -75,6 +77,7 @@ class CourtApi {
     bool? isFeatured,
     double? minPrice,
     double? maxPrice,
+    double? minRating,
     bool? underMaintenance,
   }) async {
     final response = await _dio.get<dynamic>(
@@ -92,6 +95,7 @@ class CourtApi {
         isFeatured: isFeatured,
         minPrice: minPrice,
         maxPrice: maxPrice,
+        minRating: minRating,
         underMaintenance: underMaintenance,
       ),
     );

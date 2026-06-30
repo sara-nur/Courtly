@@ -46,6 +46,28 @@ class ReservationApi {
     );
   }
 
+  /// The signed-in customer's own reservations (GET `/api/reservations/mine`,
+  /// newest-first), returned in the standard [PagedResult] envelope. [status] is
+  /// the backend integer enum value (omit for all statuses).
+  Future<PagedResult<Reservation>> listMine({
+    int page = 1,
+    int pageSize = 20,
+    int? status,
+    DateTime? fromUtc,
+    DateTime? toUtc,
+  }) async {
+    final query = <String, dynamic>{'page': page, 'pageSize': pageSize};
+    if (status != null) query['status'] = status;
+    if (fromUtc != null) query['fromUtc'] = fromUtc.toUtc().toIso8601String();
+    if (toUtc != null) query['toUtc'] = toUtc.toUtc().toIso8601String();
+
+    final response = await _dio.get<dynamic>('$_base/mine', queryParameters: query);
+    return PagedResult<Reservation>.fromJson(
+      (response.data as Map).cast<String, dynamic>(),
+      Reservation.fromJson,
+    );
+  }
+
   Future<ReservationDetail> getById(int id) async {
     final response = await _dio.get<dynamic>('$_base/$id');
     return ReservationDetail.fromJson((response.data as Map).cast<String, dynamic>());

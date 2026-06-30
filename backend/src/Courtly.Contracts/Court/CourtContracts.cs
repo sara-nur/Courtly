@@ -30,6 +30,8 @@ public sealed record CourtDto(
     string? PrimaryImageUrl,
     double? Latitude,
     double? Longitude,
+    double? AvgRating,
+    int ReviewCount,
     bool IsUnderMaintenance = false,
     string? MaintenanceReason = null,
     DateTime? MaintenanceStartUtc = null);
@@ -77,4 +79,5 @@ public sealed record CourtListQuery(
     decimal? MinPrice,
     decimal? MaxPrice,
     bool? IsFeatured,
-    bool? UnderMaintenance = null);
+    bool? UnderMaintenance = null,
+    double? MinRating = null);

@@ -8,6 +8,10 @@ import '../../features/auth/presentation/auth_splash.dart';
 import '../../features/auth/presentation/client_login_screen.dart';
 import '../../features/auth/presentation/forgot_password_screen.dart';
 import '../../features/auth/presentation/register_screen.dart';
+import '../../features/client_home/presentation/client_home_screen.dart';
+import '../../features/court_search/presentation/client_search_screen.dart';
+import '../../features/news/domain/news_models.dart';
+import '../../features/news/presentation/client_news_detail_screen.dart';
 import '../../features/placeholders/feature_placeholder.dart';
 import '../../features/profile/presentation/client_profile_screen.dart';
 import '../shell/client_shell.dart';
@@ -23,6 +27,10 @@ abstract final class ClientRoutes {
   static const String bookings = '/bookings';
   static const String notifications = '/notifications';
   static const String profile = '/profile';
+
+  /// Full-screen article reader, pushed above the bottom-nav shell from the
+  /// Home news feed. The [News] article rides along as the route's `extra`.
+  static const String newsDetail = '/news-detail';
 }
 
 /// Builds the client mobile router with an auth guard, mirroring the admin router
@@ -79,26 +87,20 @@ final clientRouterProvider = Provider<GoRouter>((ref) {
         path: ClientRoutes.forgotPassword,
         builder: (context, state) => const ForgotPasswordScreen(),
       ),
+      // Full-screen article reader pushed above the shell from the Home feed.
+      // The tapped article is passed as `extra` (the feed already has the full
+      // text), so no by-id refetch is needed.
+      GoRoute(
+        path: ClientRoutes.newsDetail,
+        builder: (context, state) =>
+            ClientNewsDetailScreen(news: state.extra as News?),
+      ),
       StatefulShellRoute.indexedStack(
         builder: (context, state, navigationShell) =>
             ClientShell(navigationShell: navigationShell),
         branches: [
-          _branch(
-            ClientRoutes.home,
-            const FeaturePlaceholder(
-              title: 'Ready to serve?',
-              subtitle: 'Find and book a court near you.',
-              icon: Icons.home_outlined,
-            ),
-          ),
-          _branch(
-            ClientRoutes.search,
-            const FeaturePlaceholder(
-              title: 'Search',
-              subtitle: 'Filter courts by price, surface and rating.',
-              icon: Icons.search,
-            ),
-          ),
+          _branch(ClientRoutes.home, const ClientHomeScreen()),
+          _branch(ClientRoutes.search, const ClientSearchScreen()),
           _branch(
             ClientRoutes.bookings,
             const FeaturePlaceholder(

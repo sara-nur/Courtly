@@ -54,6 +54,8 @@ class Court {
     this.isUnderMaintenance = false,
     this.maintenanceReason,
     this.maintenanceStartUtc,
+    this.avgRating,
+    this.reviewCount = 0,
   });
 
   final int id;
@@ -94,6 +96,13 @@ class Court {
   /// When the active maintenance window started (null when not under maintenance).
   final DateTime? maintenanceStartUtc;
 
+  /// Average review rating (null when the court has no reviews yet). Render the
+  /// rating badge ONLY when non-null.
+  final double? avgRating;
+
+  /// Number of reviews backing [avgRating] (0 when none).
+  final int reviewCount;
+
   factory Court.fromJson(Map<String, dynamic> json) => Court(
         id: (json['id'] as num).toInt(),
         name: json['name'] as String,
@@ -118,6 +127,8 @@ class Court {
         maintenanceStartUtc: json['maintenanceStartUtc'] == null
             ? null
             : DateTime.parse(json['maintenanceStartUtc'] as String),
+        avgRating: (json['avgRating'] as num?)?.toDouble(),
+        reviewCount: (json['reviewCount'] as num?)?.toInt() ?? 0,
       );
 }
 

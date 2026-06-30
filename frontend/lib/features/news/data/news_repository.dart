@@ -33,6 +33,17 @@ class NewsRepository {
     }
   }
 
+  Future<PagedResult<News>> listPublished({
+    int page = 1,
+    int pageSize = 20,
+  }) async {
+    try {
+      return await _api.listPublished(page: page, pageSize: pageSize);
+    } on DioException catch (e) {
+      throw ApiException.from(e);
+    }
+  }
+
   Future<News> create({
     required String title,
     required String text,

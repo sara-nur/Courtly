@@ -98,6 +98,14 @@ public sealed class CourtService : ICourtService
             query = query.Where(c => c.HourlyPrice <= filter.MaxPrice.Value);
         }
 
+        // Rating filter (F10 amend): courts whose average review rating meets the floor. Expressed as a correlated
+        // subquery over the Reviews DbSet (averaged as double?), so it runs at the DB (Where clause), never in memory.
+        if (filter.MinRating.HasValue)
+        {
+            query = query.Where(c =>
+                _db.Reviews.Where(r => r.CourtId == c.Id).Average(r => (double?)r.Rating) >= filter.MinRating.Value);
+        }
+
         // Maintenance filter (F12): courts with / without an OPEN window covering now. Runs at the DB (Any subquery).
         // The open-window predicate is inlined (an EF expression tree cannot call a shared helper method).
         if (filter.UnderMaintenance.HasValue)
@@ -113,7 +121,7 @@ public sealed class CourtService : ICourtService
 
         // Project to the provider-agnostic CourtRow (navs -> JOINs, no N+1), page at the DB, then build the
         // PrimaryImageUrl string in memory via ToDto — the URL cannot be translated inside the IQueryable (Npgsql).
-        var paged = await Project(query.OrderByDescending(c => c.Id), now) // newest-first
+        var paged = await Project(query.OrderByDescending(c => c.Id), now, _db.Reviews) // newest-first
             .ToPagedResultAsync(pagination, ct);
 
         return new PagedResult<CourtDto>(
@@ -122,7 +130,7 @@ public sealed class CourtService : ICourtService
 
     public async Task<CourtDto> GetByIdAsync(long id, CancellationToken ct = default)
     {
-        var row = await Project(_db.Courts.AsNoTracking().Where(c => c.Id == id), _clock.UtcNow)
+        var row = await Project(_db.Courts.AsNoTracking().Where(c => c.Id == id), _clock.UtcNow, _db.Reviews)
             .FirstOrDefaultAsync(ct);
 
         return row is null ? throw new NotFoundException($"Court {id} was not found.") : ToDto(row);
@@ -227,7 +235,8 @@ public sealed class CourtService : ICourtService
     /// resolves the current maintenance state (F12) inside the same SQL — a court is under maintenance when it has an
     /// OPEN window (Scheduled/InProgress) covering now; the active window's reason/start are pulled by an ordered
     /// subquery (earliest covering window).</summary>
-    private static IQueryable<CourtRow> Project(IQueryable<Domain.Entities.Court> source, DateTime now)
+    private static IQueryable<CourtRow> Project(
+        IQueryable<Domain.Entities.Court> source, DateTime now, DbSet<Domain.Entities.Review> reviews)
     {
         return source.Select(c => new CourtRow(
             c.Id,
@@ -265,7 +274,11 @@ public sealed class CourtService : ICourtService
                             && m.StartUtc <= now && (m.EndUtc == null || m.EndUtc > now))
                 .OrderBy(m => m.StartUtc)
                 .Select(m => (DateTime?)m.StartUtc)
-                .FirstOrDefault()));
+                .FirstOrDefault(),
+            // Rating aggregates as correlated subqueries over the Reviews DbSet — EF folds these into the single
+            // projection SQL (no extra round-trip / N+1). AvgRating is null when the court has no reviews.
+            reviews.Where(r => r.CourtId == c.Id).Select(r => (double?)r.Rating).Average(),
+            reviews.Count(r => r.CourtId == c.Id)));
     }
 
     /// <summary>Maps an intermediate <see cref="CourtRow"/> to the wire DTO, building the relative
@@ -274,13 +287,14 @@ public sealed class CourtService : ICourtService
         new(r.Id, r.Name, r.Description, r.CityId, r.CityName, r.CountryId, r.CountryName, r.SurfaceTypeId,
             r.SurfaceTypeName, r.CourtTypeId, r.CourtTypeName, r.IsIndoor, r.IsActive, r.IsFeatured, r.HourlyPrice,
             r.PrimaryImageId is long pid ? $"/api/images/{pid}" : null, r.Latitude, r.Longitude,
+            r.AvgRating, r.ReviewCount,
             r.IsUnderMaintenance, r.MaintenanceReason, r.MaintenanceStartUtc);
 
     /// <summary>Re-reads the row with the nav names projected (single JOIN query) so writes return the same shape
     /// as the read path.</summary>
     private async Task<CourtDto> ProjectAsync(long id, CancellationToken ct)
     {
-        return ToDto(await Project(_db.Courts.AsNoTracking().Where(c => c.Id == id), _clock.UtcNow).FirstAsync(ct));
+        return ToDto(await Project(_db.Courts.AsNoTracking().Where(c => c.Id == id), _clock.UtcNow, _db.Reviews).FirstAsync(ct));
     }
 
     /// <summary>Provider-agnostic intermediate carrying every scalar <see cref="CourtDto"/> field plus the primary
@@ -307,7 +321,9 @@ public sealed class CourtService : ICourtService
         double? Longitude,
         bool IsUnderMaintenance,
         string? MaintenanceReason,
-        DateTime? MaintenanceStartUtc);
+        DateTime? MaintenanceStartUtc,
+        double? AvgRating,
+        int ReviewCount);
 
     /// <summary>Validates the City FK before insert/update so a bad CityId is a clean 404, not an FK violation.</summary>
     private async Task EnsureCityExistsAsync(long cityId, CancellationToken ct)

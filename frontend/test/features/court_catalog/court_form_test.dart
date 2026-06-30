@@ -132,6 +132,7 @@ class _FakeCourtRepository implements CourtRepository {
     bool? isFeatured,
     double? minPrice,
     double? maxPrice,
+    double? minRating,
     bool? underMaintenance,
   }) async =>
       const PagedResult<Court>(
