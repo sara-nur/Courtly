@@ -10,6 +10,7 @@ import '../../features/court_catalog/presentation/courts_screen.dart';
 import '../../features/dashboard/presentation/dashboard_screen.dart';
 import '../../features/placeholders/feature_placeholder.dart';
 import '../../features/reference_data/presentation/settings_screen.dart';
+import '../../features/reports/presentation/reports_screen.dart';
 import '../../features/reservations/presentation/reservation_detail_screen.dart';
 import '../../features/reservations/presentation/reservations_screen.dart';
 import '../shell/admin_shell.dart';
@@ -103,14 +104,7 @@ final adminRouterProvider = Provider<GoRouter>((ref) {
               icon: Icons.people_outline,
             ),
           ),
-          _branch(
-            AdminRoutes.reports,
-            const FeaturePlaceholder(
-              title: 'Reports',
-              subtitle: 'Generate downloadable, printable PDF reports.',
-              icon: Icons.bar_chart_outlined,
-            ),
-          ),
+          _branch(AdminRoutes.reports, const ReportsScreen()),
           _branch(AdminRoutes.settings, const SettingsScreen()),
         ],
       ),
