@@ -8,6 +8,7 @@ import '../../features/auth/presentation/auth_splash.dart';
 import '../../features/auth/presentation/login_screen.dart';
 import '../../features/court_catalog/presentation/courts_screen.dart';
 import '../../features/dashboard/presentation/dashboard_screen.dart';
+import '../../features/news/presentation/news_screen.dart';
 import '../../features/placeholders/feature_placeholder.dart';
 import '../../features/reference_data/presentation/settings_screen.dart';
 import '../../features/reports/presentation/reports_screen.dart';
@@ -25,6 +26,7 @@ abstract final class AdminRoutes {
   static const String users = '/users';
   static const String reports = '/reports';
   static const String settings = '/settings';
+  static const String news = '/news';
 
   /// Path-parameter segment for the reservation detail route (child of
   /// [reservations]) and the full path for a given reservation id.
@@ -106,6 +108,7 @@ final adminRouterProvider = Provider<GoRouter>((ref) {
           ),
           _branch(AdminRoutes.reports, const ReportsScreen()),
           _branch(AdminRoutes.settings, const SettingsScreen()),
+          _branch(AdminRoutes.news, const NewsScreen()),
         ],
       ),
     ],

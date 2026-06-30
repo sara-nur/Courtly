@@ -36,7 +36,8 @@ public class CourtlyModelTests
             typeof(AppUser), typeof(Country), typeof(City), typeof(SurfaceType), typeof(CourtType),
             typeof(Amenity), typeof(Court), typeof(CourtImage), typeof(CourtAmenity),
             typeof(CourtMaintenanceLog), typeof(TimeSlot), typeof(Reservation), typeof(ReservationAudit),
-            typeof(Payment), typeof(Refund), typeof(Review), typeof(Notification), typeof(News),
+            typeof(Payment), typeof(Refund), typeof(Review), typeof(Notification),
+            typeof(Courtly.Domain.Entities.News),
             typeof(SearchHistory), typeof(RecommendationFeedback), typeof(Favorite),
             typeof(RefreshToken), typeof(RevokedToken), typeof(PasswordResetToken),
         };

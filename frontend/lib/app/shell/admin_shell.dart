@@ -26,6 +26,7 @@ class AdminShell extends ConsumerWidget {
     _AdminNavItem('Users', Icons.people_outline),
     _AdminNavItem('Reports', Icons.bar_chart_outlined),
     _AdminNavItem('Settings', Icons.settings_outlined),
+    _AdminNavItem('News', Icons.newspaper_outlined),
   ];
 
   Future<void> _confirmSignOut(BuildContext context, WidgetRef ref) async {

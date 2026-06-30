@@ -108,6 +108,7 @@ builder.Services.AddCourtlyNotificationService(); // F18: user-facing in-app not
 builder.Services.AddSignalR();                // F18: real-time notification push hub
 builder.Services.AddCourtlyDashboard();       // F19: dashboard analytics (KPIs, charts, health) over F14/F16 data
 builder.Services.AddCourtlyReports();         // F20: downloadable/printable PDF reports (reconcile with F19)
+builder.Services.AddCourtlyNews();            // F21: news / announcements CRUD + client published-read
 
 // F18: stateless verifier for the "InternalKey" policy — the Worker authenticates to /api/internal/push on the
 // shared X-Internal-Key secret alone (no JWT). Singleton: it holds no per-request state.
