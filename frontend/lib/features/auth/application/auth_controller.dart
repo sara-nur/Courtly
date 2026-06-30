@@ -45,6 +45,31 @@ class AuthController extends Notifier<AuthState> {
     state = AuthState.authenticated(user);
   }
 
+  /// Registers a new account and signs it in (the server auto-logs-in). On
+  /// success the state becomes authenticated and the router redirects home; on
+  /// failure the [ApiException] propagates to the form.
+  Future<void> register({
+    required String email,
+    required String password,
+    required String firstName,
+    required String lastName,
+    int? cityId,
+  }) async {
+    final user = await ref.read(authRepositoryProvider).register(
+          email: email,
+          password: password,
+          firstName: firstName,
+          lastName: lastName,
+          cityId: cityId,
+        );
+    state = AuthState.authenticated(user);
+  }
+
+  /// Requests a password-reset link by email. Does not change auth state — the
+  /// reset itself is completed on the web page the emailed link opens.
+  Future<void> forgotPassword(String email) =>
+      ref.read(authRepositoryProvider).forgotPassword(email);
+
   /// Revokes the session server-side and clears it locally.
   Future<void> logout() async {
     await ref.read(authRepositoryProvider).logout();

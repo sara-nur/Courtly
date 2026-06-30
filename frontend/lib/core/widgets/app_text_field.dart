@@ -15,6 +15,7 @@ class AppTextField extends StatelessWidget {
     this.keyboardType,
     this.enabled = true,
     this.prefixIcon,
+    this.suffixIcon,
     this.onChanged,
     this.maxLines = 1,
     this.textInputAction,
@@ -29,6 +30,9 @@ class AppTextField extends StatelessWidget {
   final TextInputType? keyboardType;
   final bool enabled;
   final IconData? prefixIcon;
+
+  /// Optional trailing widget (e.g. a show/hide password toggle).
+  final Widget? suffixIcon;
   final ValueChanged<String>? onChanged;
   final int maxLines;
   final TextInputAction? textInputAction;
@@ -50,6 +54,7 @@ class AppTextField extends StatelessWidget {
         labelText: label,
         hintText: hint,
         prefixIcon: prefixIcon != null ? Icon(prefixIcon) : null,
+        suffixIcon: suffixIcon,
       ),
     );
   }

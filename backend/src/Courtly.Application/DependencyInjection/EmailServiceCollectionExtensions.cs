@@ -8,9 +8,9 @@ namespace Courtly.Application.DependencyInjection;
 public static class EmailServiceCollectionExtensions
 {
     /// <summary>
-    /// Registers the real SMTP sender as <see cref="IEmailSender"/>, replacing the logging stub. Only the
-    /// Worker wires this — the API keeps the logging sender for password-reset, since email delivery is the Worker's
-    /// responsibility. Scoped to match the other request-scoped services.
+    /// Registers the real SMTP sender as <see cref="IEmailSender"/>. Both hosts wire it: the Worker for booking
+    /// mail (feature 17) and the API for the password-reset link email (feature 22). Scoped to match the other
+    /// request-scoped services.
     /// </summary>
     public static IServiceCollection AddCourtlySmtpEmail(this IServiceCollection services)
     {

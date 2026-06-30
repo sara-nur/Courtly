@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
+import '../../../app/router/client_router.dart';
 import '../../../core/network/api_exception.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
@@ -8,27 +10,28 @@ import '../../../core/widgets/app_text_field.dart';
 import '../application/auth_controller.dart';
 import 'auth_scaffold.dart';
 
-/// Admin sign-in screen, wired to the live `/api/auth/login`. On success the
-/// router redirect (driven by the auth state) sends the user to the dashboard,
-/// so this screen never navigates manually. Server validation messages render
-/// **below** their field (rubric §4); a credential/role failure shows a banner.
-class AdminLoginScreen extends ConsumerStatefulWidget {
-  const AdminLoginScreen({super.key});
+/// Client (mobile) sign-in screen, wired to the live `/api/auth/login`. On
+/// success the router redirect sends the user to Home, so this screen never
+/// navigates manually. Links out to register and forgot-password. Server
+/// validation messages render **below** their field (rubric §4); a credential
+/// failure shows a banner.
+class ClientLoginScreen extends ConsumerStatefulWidget {
+  const ClientLoginScreen({super.key});
 
   @override
-  ConsumerState<AdminLoginScreen> createState() => _AdminLoginScreenState();
+  ConsumerState<ClientLoginScreen> createState() => _ClientLoginScreenState();
 }
 
-class _AdminLoginScreenState extends ConsumerState<AdminLoginScreen> {
+class _ClientLoginScreenState extends ConsumerState<ClientLoginScreen> {
   final _formKey = GlobalKey<FormState>();
   final _identifierController = TextEditingController();
   final _passwordController = TextEditingController();
 
-  // Backend field keys (lower-cased to match ApiException's casing).
   static const String _identifierField = 'usernameoremail';
   static const String _passwordField = 'password';
 
   bool _submitting = false;
+  bool _obscurePassword = true;
   String? _formError;
   final Map<String, String> _serverErrors = {};
 
@@ -61,8 +64,6 @@ class _AdminLoginScreenState extends ConsumerState<AdminLoginScreen> {
             if (messages.isNotEmpty) _serverErrors[field] = messages.first;
           });
         }
-        // Show the banner only when there is no field-specific message to point
-        // at (e.g. "Invalid credentials." or a blocked role).
         _formError = _serverErrors.isEmpty ? e.message : null;
       });
       _formKey.currentState!.validate();
@@ -86,9 +87,8 @@ class _AdminLoginScreenState extends ConsumerState<AdminLoginScreen> {
   @override
   Widget build(BuildContext context) {
     return AuthScaffold(
-      showAdminSuffix: true,
-      title: 'Welcome back',
-      subtitle: 'Sign in to manage courts and reservations.',
+      title: 'Welcome to Courtly',
+      subtitle: 'Sign in to book a court.',
       child: Form(
         key: _formKey,
         child: Column(
@@ -107,26 +107,40 @@ class _AdminLoginScreenState extends ConsumerState<AdminLoginScreen> {
               textInputAction: TextInputAction.next,
               autovalidateMode: AutovalidateMode.onUserInteraction,
               onChanged: (_) => _clearServerError(_identifierField),
-              validator: (v) => _validateRequired(
-                'Username or email',
-                _identifierField,
-                v,
-              ),
+              validator: (v) =>
+                  _validateRequired('Username or email', _identifierField, v),
             ),
             const SizedBox(height: AppSpacing.md),
             AppTextField(
               controller: _passwordController,
               label: 'Password',
               prefixIcon: Icons.lock_outline,
-              obscureText: true,
+              obscureText: _obscurePassword,
               enabled: !_submitting,
               textInputAction: TextInputAction.done,
               autovalidateMode: AutovalidateMode.onUserInteraction,
               onChanged: (_) => _clearServerError(_passwordField),
               validator: (v) =>
                   _validateRequired('Password', _passwordField, v),
+              suffixIcon: IconButton(
+                icon: Icon(_obscurePassword
+                    ? Icons.visibility_outlined
+                    : Icons.visibility_off_outlined),
+                tooltip: _obscurePassword ? 'Show password' : 'Hide password',
+                onPressed: () =>
+                    setState(() => _obscurePassword = !_obscurePassword),
+              ),
             ),
-            const SizedBox(height: AppSpacing.lg),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton(
+                onPressed: _submitting
+                    ? null
+                    : () => context.push(ClientRoutes.forgotPassword),
+                child: const Text('Forgot password?'),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.xs),
             SizedBox(
               height: AppSpacing.inputHeight,
               child: ElevatedButton(
@@ -142,6 +156,20 @@ class _AdminLoginScreenState extends ConsumerState<AdminLoginScreen> {
                       )
                     : const Text('Sign in'),
               ),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            Wrap(
+              alignment: WrapAlignment.center,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                const Text("Don't have an account?"),
+                TextButton(
+                  onPressed: _submitting
+                      ? null
+                      : () => context.push(ClientRoutes.register),
+                  child: const Text('Create account'),
+                ),
+              ],
             ),
           ],
         ),
