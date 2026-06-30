@@ -106,6 +106,7 @@ builder.Services.AddRabbitMqConnection();     // F17: shared singleton RabbitMQ 
 builder.Services.AddRabbitMqMessaging();      // F17: real publisher REPLACES the logging stubs (rubric §3.2 — main service publishes to RabbitMQ)
 builder.Services.AddCourtlyNotificationService(); // F18: user-facing in-app notification inbox
 builder.Services.AddSignalR();                // F18: real-time notification push hub
+builder.Services.AddCourtlyDashboard();       // F19: dashboard analytics (KPIs, charts, health) over F14/F16 data
 
 // F18: stateless verifier for the "InternalKey" policy — the Worker authenticates to /api/internal/push on the
 // shared X-Internal-Key secret alone (no JWT). Singleton: it holds no per-request state.

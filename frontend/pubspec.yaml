@@ -28,6 +28,8 @@ dependencies:
   latlong2: ^0.9.1
   # desktop image file selection — F11
   file_picker: ^8.1.4
+  # dashboard KPI charts (revenue trend, peak hours, popular courts) — F19
+  fl_chart: ^0.69.0
 
 dev_dependencies:
   flutter_test:

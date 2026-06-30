@@ -7,6 +7,7 @@ import '../../features/auth/domain/auth_models.dart';
 import '../../features/auth/presentation/auth_splash.dart';
 import '../../features/auth/presentation/login_screen.dart';
 import '../../features/court_catalog/presentation/courts_screen.dart';
+import '../../features/dashboard/presentation/dashboard_screen.dart';
 import '../../features/placeholders/feature_placeholder.dart';
 import '../../features/reference_data/presentation/settings_screen.dart';
 import '../../features/reservations/presentation/reservation_detail_screen.dart';
@@ -72,14 +73,7 @@ final adminRouterProvider = Provider<GoRouter>((ref) {
         builder: (context, state, navigationShell) =>
             AdminShell(navigationShell: navigationShell),
         branches: [
-          _branch(
-            AdminRoutes.dashboard,
-            const FeaturePlaceholder(
-              title: 'Dashboard Overview',
-              subtitle: "Welcome back, Admin. Here's what's happening today.",
-              icon: Icons.dashboard_outlined,
-            ),
-          ),
+          _branch(AdminRoutes.dashboard, const DashboardScreen()),
           // Reservations: the list at /reservations with a full-screen detail
           // route at /reservations/:id (kept inside the branch so the admin
           // shell + nav stay; back returns to the list).
