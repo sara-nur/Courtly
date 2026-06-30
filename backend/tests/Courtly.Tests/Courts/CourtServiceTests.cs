@@ -42,9 +42,9 @@ public class CourtServiceTests
     private static CourtListQuery Filter(
         string? search = null, long? cityId = null, long? countryId = null, long? surfaceTypeId = null,
         long? courtTypeId = null, bool? isIndoor = null, bool? isActive = null, decimal? minPrice = null,
-        decimal? maxPrice = null, bool? isFeatured = null, bool? underMaintenance = null) =>
+        decimal? maxPrice = null, bool? isFeatured = null, bool? underMaintenance = null, double? minRating = null) =>
         new(search, cityId, countryId, surfaceTypeId, courtTypeId, isIndoor, isActive, minPrice, maxPrice,
-            isFeatured, underMaintenance);
+            isFeatured, underMaintenance, minRating);
 
     private sealed record Refs(long CountryId, long CityId, long SurfaceTypeId, long CourtTypeId);
 
@@ -537,5 +537,72 @@ public class CourtServiceTests
         var service = NewService(db);
 
         await Assert.ThrowsAsync<NotFoundException>(() => service.DeleteAsync(999));
+    }
+
+    // --- Rating aggregate projection + MinRating filter (F23) -------------------------------------
+
+    /// <summary>Adds a review row for a court. FK to a reservation is not enforced under the InMemory provider, so the
+    /// rating-only signal is seeded directly without a backing reservation.</summary>
+    private static void AddReview(CourtlyDbContext db, long courtId, int rating) =>
+        db.Reviews.Add(new Review
+        {
+            CourtId = courtId,
+            UserId = Guid.NewGuid(),
+            Rating = rating,
+            CreatedAtUtc = FixedNow,
+        });
+
+    /// <summary>Seeds one reviewed court (ratings 4 + 5 → avg 4.5, count 2) and one court with no reviews.</summary>
+    private static async Task<(long ReviewedId, long UnratedId)> SeedRatedAndUnratedAsync(CourtlyDbContext db, Refs refs)
+    {
+        var reviewed = new Court { Name = "Reviewed", CityId = refs.CityId, SurfaceTypeId = refs.SurfaceTypeId, CourtTypeId = refs.CourtTypeId };
+        var unrated = new Court { Name = "Unrated", CityId = refs.CityId, SurfaceTypeId = refs.SurfaceTypeId, CourtTypeId = refs.CourtTypeId };
+        db.Courts.AddRange(reviewed, unrated);
+        await db.SaveChangesAsync();
+
+        AddReview(db, reviewed.Id, 4);
+        AddReview(db, reviewed.Id, 5);
+        await db.SaveChangesAsync();
+
+        return (reviewed.Id, unrated.Id);
+    }
+
+    [Fact]
+    public async Task GetPagedAsync_projects_average_rating_and_count_per_court()
+    {
+        await using var db = NewDb();
+        var refs = await SeedRefsAsync(db);
+        var (reviewedId, unratedId) = await SeedRatedAndUnratedAsync(db, refs);
+        var service = NewService(db);
+
+        var page = await service.GetPagedAsync(new PaginationQuery(), Filter());
+
+        var reviewed = page.Items.Single(c => c.Id == reviewedId);
+        Assert.Equal(4.5, reviewed.AvgRating);
+        Assert.Equal(2, reviewed.ReviewCount);
+
+        var unrated = page.Items.Single(c => c.Id == unratedId);
+        Assert.Null(unrated.AvgRating);  // no reviews → null average, not 0
+        Assert.Equal(0, unrated.ReviewCount);
+    }
+
+    [Fact]
+    public async Task GetPagedAsync_filters_by_min_rating_and_excludes_unrated_courts()
+    {
+        await using var db = NewDb();
+        var refs = await SeedRefsAsync(db);
+        var (reviewedId, _) = await SeedRatedAndUnratedAsync(db, refs);
+        var service = NewService(db);
+
+        // MinRating 5 is above the 4.5 average → the reviewed court is excluded (and so is the unrated one).
+        var aboveAvg = await service.GetPagedAsync(new PaginationQuery(), Filter(minRating: 5));
+        Assert.Empty(aboveAvg.Items);
+
+        // MinRating 4 is at/below the 4.5 average → the reviewed court is included; the unrated court is still excluded
+        // because an unrated court never satisfies a rating floor.
+        var atAvg = await service.GetPagedAsync(new PaginationQuery(), Filter(minRating: 4));
+        var only = Assert.Single(atAvg.Items);
+        Assert.Equal(reviewedId, only.Id);
+        Assert.Equal("Reviewed", only.Name);
     }
 }

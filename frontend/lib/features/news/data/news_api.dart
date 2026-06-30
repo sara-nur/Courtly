@@ -50,6 +50,22 @@ class NewsApi {
     );
   }
 
+  /// Client feed: only active, already-published items
+  /// (GET `/api/news/published`). Returns the standard [PagedResult] envelope.
+  Future<PagedResult<News>> listPublished({
+    int page = 1,
+    int pageSize = 20,
+  }) async {
+    final response = await _dio.get<dynamic>(
+      '$_news/published',
+      queryParameters: <String, dynamic>{'page': page, 'pageSize': pageSize},
+    );
+    return PagedResult<News>.fromJson(
+      (response.data as Map).cast<String, dynamic>(),
+      News.fromJson,
+    );
+  }
+
   Future<News> create({
     required String title,
     required String text,

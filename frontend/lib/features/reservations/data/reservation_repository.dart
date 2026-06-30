@@ -39,6 +39,26 @@ class ReservationRepository {
     }
   }
 
+  Future<PagedResult<Reservation>> listMine({
+    int page = 1,
+    int pageSize = 20,
+    int? status,
+    DateTime? fromUtc,
+    DateTime? toUtc,
+  }) async {
+    try {
+      return await _api.listMine(
+        page: page,
+        pageSize: pageSize,
+        status: status,
+        fromUtc: fromUtc,
+        toUtc: toUtc,
+      );
+    } on DioException catch (e) {
+      throw ApiException.from(e);
+    }
+  }
+
   Future<ReservationDetail> getById(int id) async {
     try {
       return await _api.getById(id);

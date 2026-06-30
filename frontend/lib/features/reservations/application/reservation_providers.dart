@@ -21,6 +21,19 @@ final reservationRepositoryProvider = Provider<ReservationRepository>(
 /// Default page size for the reservation table (single source — no magic numbers).
 const int kReservationPageSize = 20;
 
+/// Page size for the client home feed's recent-reservations preview (single source).
+const int kMyRecentReservationsSize = 5;
+
+/// The client home feed: the signed-in customer's most recent reservations
+/// (first page, newest-first per the backend), capped at
+/// [kMyRecentReservationsSize].
+final myRecentReservationsProvider = FutureProvider<PagedResult<Reservation>>(
+  (ref) => ref.watch(reservationRepositoryProvider).listMine(
+        page: 1,
+        pageSize: kMyRecentReservationsSize,
+      ),
+);
+
 /// Page size for the court lookup behind the Court filter + "+ New Booking".
 const int kCourtLookupPageSize = 100;
 

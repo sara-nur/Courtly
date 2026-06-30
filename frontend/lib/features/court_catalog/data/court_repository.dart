@@ -28,6 +28,7 @@ class CourtRepository {
     bool? isFeatured,
     double? minPrice,
     double? maxPrice,
+    double? minRating,
     bool? underMaintenance,
   }) async {
     try {
@@ -44,6 +45,7 @@ class CourtRepository {
         isFeatured: isFeatured,
         minPrice: minPrice,
         maxPrice: maxPrice,
+        minRating: minRating,
         underMaintenance: underMaintenance,
       );
     } on DioException catch (e) {
