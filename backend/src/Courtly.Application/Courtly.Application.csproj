@@ -9,6 +9,8 @@
     <PackageReference Include="FluentValidation" Version="11.11.0" />
     <!-- Feature 17: MailKit = real SMTP email sender (SmtpEmailSender, beside IEmailSender; Mailpit by default). -->
     <PackageReference Include="MailKit" Version="4.17.0" />
+    <!-- Feature 20: QuestPDF = server-side PDF generation for the downloadable/printable admin reports (Community license). -->
+    <PackageReference Include="QuestPDF" Version="2024.12.3" />
   </ItemGroup>
 
   <ItemGroup>

@@ -1,7 +1,7 @@
 using Courtly.Application.Abstractions;
+using Courtly.Application.Analytics;
 using Courtly.Contracts.Dashboard;
 using Courtly.Domain.Entities;
-using Courtly.Domain.Enums;
 using Courtly.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
@@ -245,58 +245,18 @@ public sealed class DashboardService : IDashboardService
     }
 
     // --- candidate-set query builders ---------------------------------------------------------------
+    // The "what counts" predicates live in AnalyticsFilters so F20's reports reconcile with the dashboard by
+    // construction (same definitions, one place — rubric §8.1). Each builder owns AsNoTracking; the time predicate is
+    // added by each caller.
 
-    /// <summary>Reservations that count toward the dashboard: Confirmed/Completed, on an active court that is not under
-    /// maintenance, optionally narrowed to one court type. The time predicate is added by each caller.</summary>
-    private IQueryable<Reservation> CountedReservations(long? courtTypeId, IReadOnlyList<long> maintenanceIds)
-    {
-        var query = _db.Reservations.AsNoTracking().Where(r =>
-            (r.Status == ReservationStatus.Confirmed || r.Status == ReservationStatus.Completed)
-            && r.Court.IsActive
-            && !maintenanceIds.Contains(r.CourtId));
+    private IQueryable<Reservation> CountedReservations(long? courtTypeId, IReadOnlyList<long> maintenanceIds) =>
+        AnalyticsFilters.CountedReservations(_db.Reservations.AsNoTracking(), courtTypeId, maintenanceIds);
 
-        if (courtTypeId.HasValue)
-        {
-            query = query.Where(r => r.Court.CourtTypeId == courtTypeId.Value);
-        }
+    private IQueryable<Payment> CountedPayments(long? courtTypeId, IReadOnlyList<long> maintenanceIds) =>
+        AnalyticsFilters.CountedPayments(_db.Payments.AsNoTracking(), courtTypeId, maintenanceIds);
 
-        return query;
-    }
-
-    /// <summary>Succeeded payments on candidate courts (the net-revenue source — Refunded payments are excluded by the
-    /// status filter). The paid-time predicate is added by each caller.</summary>
-    private IQueryable<Payment> CountedPayments(long? courtTypeId, IReadOnlyList<long> maintenanceIds)
-    {
-        var query = _db.Payments.AsNoTracking().Where(p =>
-            p.Status == PaymentStatus.Succeeded
-            && p.PaidAtUtc != null
-            && p.Reservation.Court.IsActive
-            && !maintenanceIds.Contains(p.Reservation.CourtId));
-
-        if (courtTypeId.HasValue)
-        {
-            query = query.Where(p => p.Reservation.Court.CourtTypeId == courtTypeId.Value);
-        }
-
-        return query;
-    }
-
-    /// <summary>Active slots on candidate courts — the occupancy denominator. The start-time predicate is added by the
-    /// caller.</summary>
-    private IQueryable<TimeSlot> CandidateSlots(long? courtTypeId, IReadOnlyList<long> maintenanceIds)
-    {
-        var query = _db.TimeSlots.AsNoTracking().Where(s =>
-            s.IsActive
-            && s.Court.IsActive
-            && !maintenanceIds.Contains(s.CourtId));
-
-        if (courtTypeId.HasValue)
-        {
-            query = query.Where(s => s.Court.CourtTypeId == courtTypeId.Value);
-        }
-
-        return query;
-    }
+    private IQueryable<TimeSlot> CandidateSlots(long? courtTypeId, IReadOnlyList<long> maintenanceIds) =>
+        AnalyticsFilters.CandidateSlots(_db.TimeSlots.AsNoTracking(), courtTypeId, maintenanceIds);
 
     // --- helpers ------------------------------------------------------------------------------------
 

@@ -107,6 +107,7 @@ builder.Services.AddRabbitMqMessaging();      // F17: real publisher REPLACES th
 builder.Services.AddCourtlyNotificationService(); // F18: user-facing in-app notification inbox
 builder.Services.AddSignalR();                // F18: real-time notification push hub
 builder.Services.AddCourtlyDashboard();       // F19: dashboard analytics (KPIs, charts, health) over F14/F16 data
+builder.Services.AddCourtlyReports();         // F20: downloadable/printable PDF reports (reconcile with F19)
 
 // F18: stateless verifier for the "InternalKey" policy — the Worker authenticates to /api/internal/push on the
 // shared X-Internal-Key secret alone (no JWT). Singleton: it holds no per-request state.
