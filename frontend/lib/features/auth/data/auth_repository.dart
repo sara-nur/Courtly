@@ -6,10 +6,11 @@ import '../domain/auth_models.dart';
 import 'auth_api.dart';
 
 /// Orchestrates authentication: calls [AuthApi], persists tokens in
-/// [TokenStorage], and enforces the app's **role gate** (rubric §5). The desktop
-/// app only admits [allowedRoles] (Admin + Staff); a customer account that
-/// authenticates successfully is still rejected and its just-issued tokens are
-/// revoked. All failures surface as a typed [ApiException].
+/// [TokenStorage], and enforces the app's **role gate** (rubric §5). Each app
+/// admits only its [allowedRoles] (admin app: Admin + Staff; client app: User);
+/// an account that authenticates successfully but lacks an allowed role is
+/// rejected and its just-issued tokens are revoked. All failures surface as a
+/// typed [ApiException].
 class AuthRepository {
   AuthRepository({
     required AuthApi api,
@@ -57,12 +58,72 @@ class AuthRepository {
       // Valid credentials, wrong app: revoke server-side and clear locally.
       await logout();
       throw const ApiException(
-        message: 'This account does not have access to the admin app.',
+        message: 'This account does not have access to this app.',
         statusCode: 403,
       );
     }
 
     return session.user;
+  }
+
+  /// Registers a new account and signs it in. The server auto-logs-in and always
+  /// grants the `User` role, so the client's role gate passes. Mirrors [login]:
+  /// persist the issued tokens, enforce the gate, return the user. Throws
+  /// [ApiException] on validation failure (e.g. duplicate email, weak password).
+  Future<AuthUser> register({
+    required String email,
+    required String password,
+    required String firstName,
+    required String lastName,
+    int? cityId,
+  }) async {
+    final AuthSession session;
+    try {
+      session = await _api.register(
+        email: email,
+        password: password,
+        firstName: firstName,
+        lastName: lastName,
+        cityId: cityId,
+      );
+    } on DioException catch (e) {
+      throw ApiException.from(e);
+    }
+
+    try {
+      await _storage.save(
+        StoredTokens(
+          accessToken: session.accessToken,
+          refreshToken: session.refreshToken,
+          accessTokenExpiresAtUtc: session.accessTokenExpiresAtUtc,
+        ),
+      );
+    } catch (_) {
+      throw const ApiException(
+        message: 'Could not securely store your session on this device. '
+            'Please try again.',
+      );
+    }
+
+    if (!session.user.hasAnyRole(_allowedRoles)) {
+      await logout();
+      throw const ApiException(
+        message: 'This account does not have access to this app.',
+        statusCode: 403,
+      );
+    }
+
+    return session.user;
+  }
+
+  /// Requests a password-reset link by email (anti-enumeration: always succeeds
+  /// server-side). Throws [ApiException] only on a transport/validation failure.
+  Future<void> forgotPassword(String email) async {
+    try {
+      await _api.forgotPassword(email);
+    } on DioException catch (e) {
+      throw ApiException.from(e);
+    }
   }
 
   /// Restores a session on startup. Returns the user when a stored token still

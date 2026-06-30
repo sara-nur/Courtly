@@ -84,6 +84,13 @@ public static class CourtlyOptionsServiceCollectionExtensions
             .Validate(o => !string.IsNullOrWhiteSpace(o.InternalPushKey), "INTERNAL_PUSH_KEY is required.")
             .ValidateOnStart();
 
+        // Feature 22: base URL of the browser password-reset page. The API builds the emailed reset
+        // link from this base, so it's required wherever the reset mail is sent (the API).
+        services.AddOptions<AppLinkOptions>()
+            .Configure(o => o.ResetPasswordUrl = config["APP_RESET_PASSWORD_URL"] ?? string.Empty)
+            .Validate(o => !string.IsNullOrWhiteSpace(o.ResetPasswordUrl), "APP_RESET_PASSWORD_URL is required.")
+            .ValidateOnStart();
+
         // Feature 14: how long an unpaid Pending reservation holds its slot (the Worker releases expired holds in F17).
         services.AddOptions<ReservationOptions>()
             .Configure(o =>

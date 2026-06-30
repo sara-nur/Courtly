@@ -15,22 +15,40 @@ namespace Courtly.Application.Email;
 public sealed class SmtpEmailSender : IEmailSender
 {
     private readonly SmtpOptions _options;
+    private readonly AppLinkOptions _appLinks;
     private readonly ILogger<SmtpEmailSender> _logger;
 
-    public SmtpEmailSender(IOptions<SmtpOptions> options, ILogger<SmtpEmailSender> logger)
+    public SmtpEmailSender(IOptions<SmtpOptions> options, IOptions<AppLinkOptions> appLinks, ILogger<SmtpEmailSender> logger)
     {
         _options = options.Value;
+        _appLinks = appLinks.Value;
         _logger = logger;
     }
 
-    public Task SendPasswordResetAsync(string toEmail, string resetToken, CancellationToken ct = default) =>
-        SendAsync(
-            toEmail,
-            "Reset your Courtly password",
-            $"We received a request to reset your Courtly password.\n\n" +
-            $"Use this token to set a new password: {resetToken}\n\n" +
-            "If you didn't request this, you can safely ignore this email.",
-            ct);
+    public Task SendPasswordResetAsync(string toEmail, string resetToken, CancellationToken ct = default)
+    {
+        // Link to the browser reset page (feature 22): clicking it opens GET /reset-password with the
+        // email + token, where the user sets a new password — no token to type, no app deep link. The
+        // token is hex (URL-safe); the email is escaped. Base is APP_RESET_PASSWORD_URL (the web page).
+        var resetLink = $"{_appLinks.ResetPasswordUrl}?email={Uri.EscapeDataString(toEmail)}&token={resetToken}";
+
+        var text =
+            "Reset your Courtly password\n\n" +
+            "We received a request to reset your Courtly password. Open this link to set a new password " +
+            $"(it expires in 60 minutes):\n\n{resetLink}\n\n" +
+            "If you didn't request this, you can safely ignore this email.";
+
+        var html =
+            "<div style=\"font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;max-width:480px;margin:0 auto;padding:32px 24px;color:#1a1a1a;\">" +
+            "<div style=\"font-size:22px;font-weight:700;color:#2e7d32;margin-bottom:24px;\">Courtly</div>" +
+            "<p style=\"font-size:18px;font-weight:600;margin:0 0 12px;\">Reset your password</p>" +
+            "<p style=\"font-size:14px;line-height:1.6;margin:0 0 28px;color:#444;\">We received a request to reset your Courtly password. Click the button below to choose a new one. This link expires in 60 minutes.</p>" +
+            $"<p style=\"margin:0 0 28px;\"><a href=\"{resetLink}\" style=\"background:#2e7d32;color:#ffffff;text-decoration:none;padding:13px 30px;border-radius:8px;display:inline-block;font-size:15px;font-weight:600;\">Reset Password</a></p>" +
+            "<p style=\"font-size:13px;line-height:1.5;color:#999;margin:0;border-top:1px solid #eee;padding-top:16px;\">If you didn't request a password reset, you can safely ignore this email — your password won't change.</p>" +
+            "</div>";
+
+        return SendAsync(toEmail, "Reset your Courtly password", text, ct, html);
+    }
 
     public Task SendBookingConfirmedAsync(string toEmail, string userName, string courtName, DateTime startUtc, DateTime endUtc, decimal totalPrice, CancellationToken ct = default) =>
         SendAsync(
@@ -78,13 +96,17 @@ public sealed class SmtpEmailSender : IEmailSender
             : $"{startUtc:yyyy-MM-dd HH:mm} - {endUtc:yyyy-MM-dd HH:mm} UTC";
 
     // Single MailKit send path shared by all message types (rubric A.5: dispose client + message).
-    private async Task SendAsync(string toEmail, string subject, string body, CancellationToken ct)
+    // An optional htmlBody promotes the message to multipart/alternative (e.g. a clickable reset link)
+    // while keeping the plain-text part as the fallback.
+    private async Task SendAsync(string toEmail, string subject, string body, CancellationToken ct, string? htmlBody = null)
     {
         using var message = new MimeMessage();
-        message.From.Add(MailboxAddress.Parse(_options.From));
+        message.From.Add(new MailboxAddress("Courtly", _options.From));
         message.To.Add(MailboxAddress.Parse(toEmail));
         message.Subject = subject;
-        message.Body = new TextPart("plain") { Text = body };
+        message.Body = htmlBody is null
+            ? new TextPart("plain") { Text = body }
+            : new BodyBuilder { TextBody = body, HtmlBody = htmlBody }.ToMessageBody();
 
         using var client = new SmtpClient();
         await client.ConnectAsync(

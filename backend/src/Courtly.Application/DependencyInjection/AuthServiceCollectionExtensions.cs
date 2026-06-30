@@ -1,6 +1,5 @@
 using Courtly.Application.Abstractions;
 using Courtly.Application.Auth;
-using Courtly.Application.Email;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Courtly.Application.DependencyInjection;
@@ -16,7 +15,9 @@ public static class AuthServiceCollectionExtensions
 
         // Scoped: depend on the scoped CourtlyDbContext / UserManager.
         services.AddScoped<IAuthService, AuthService>();
-        services.AddScoped<IEmailSender, LoggingEmailSender>();
+        // The email transport (IEmailSender) is chosen by each host: AddCourtlySmtpEmail() in both the
+        // API (password-reset link, feature 22) and the Worker (booking mail, feature 17). Kept out of
+        // here so there is no duplicate IEmailSender registration (rubric §3.4).
 
         return services;
     }

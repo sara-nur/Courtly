@@ -5,7 +5,7 @@ import 'courtly_logo.dart';
 
 /// Client mobile shell: a persistent bottom navigation bar (Home / Search /
 /// Bookings / Notifications / Profile) wrapping the routed body, matching
-/// `ui_design_and_scope.pdf` p.8.
+/// `ui_design_and_scope.pdf` p.8. Sign-out lives on the Profile tab.
 class ClientShell extends StatelessWidget {
   const ClientShell({super.key, required this.navigationShell});
 

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
 import '../core/app_flavor.dart';
 import '../core/theme/app_theme.dart';
@@ -11,32 +10,21 @@ import 'router/client_router.dart';
 /// (admin top-nav shell vs client bottom-nav shell) and window title to use,
 /// while both share the single [AppTheme].
 ///
-/// The admin router comes from `adminRouterProvider` because it carries the
-/// auth guard (Feature 8); the client router stays a plain fixture router until
-/// its auth lands in Feature 22. Both are created once and kept stable.
-class CourtlyApp extends ConsumerStatefulWidget {
+/// Both routers come from cached Providers carrying their auth guard
+/// (`adminRouterProvider`, Feature 8; `clientRouterProvider`, Feature 22), so
+/// watching returns the same GoRouter across rebuilds with state preserved.
+class CourtlyApp extends ConsumerWidget {
   const CourtlyApp({super.key, required this.flavor});
 
   final AppFlavor flavor;
 
-  @override
-  ConsumerState<CourtlyApp> createState() => _CourtlyAppState();
-}
-
-class _CourtlyAppState extends ConsumerState<CourtlyApp> {
-  GoRouter? _clientRouter;
-
-  String get _title =>
-      widget.flavor == AppFlavor.admin ? 'Courtly Admin' : 'Courtly';
+  String get _title => flavor == AppFlavor.admin ? 'Courtly Admin' : 'Courtly';
 
   @override
-  Widget build(BuildContext context) {
-    // `adminRouterProvider` is a cached Provider, so watching it returns the
-    // same GoRouter across rebuilds (state preserved); the client router is
-    // built once and memoized locally.
-    final router = widget.flavor == AppFlavor.admin
+  Widget build(BuildContext context, WidgetRef ref) {
+    final router = flavor == AppFlavor.admin
         ? ref.watch(adminRouterProvider)
-        : (_clientRouter ??= buildClientRouter());
+        : ref.watch(clientRouterProvider);
 
     return MaterialApp.router(
       title: _title,
