@@ -70,6 +70,15 @@ class AuthController extends Notifier<AuthState> {
   Future<void> forgotPassword(String email) =>
       ref.read(authRepositoryProvider).forgotPassword(email);
 
+  /// Replaces the cached authenticated user after a self-service profile edit
+  /// (feature 28), so name/email/avatar changes propagate app-wide (e.g. the
+  /// home greeting) without another `me` round-trip. No-op when signed out.
+  void updateUser(AuthUser user) {
+    if (state.isAuthenticated) {
+      state = AuthState.authenticated(user);
+    }
+  }
+
   /// Revokes the session server-side and clears it locally.
   Future<void> logout() async {
     await ref.read(authRepositoryProvider).logout();

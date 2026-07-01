@@ -12,6 +12,7 @@ class AuthUser {
     required this.lastName,
     required this.roles,
     this.cityId,
+    this.avatarUrl,
   });
 
   final String id;
@@ -21,6 +22,11 @@ class AuthUser {
   final String lastName;
   final int? cityId;
   final List<String> roles;
+
+  /// Relative path (`/api/auth/me/avatar`) when the user has a profile image, or
+  /// `null`. The image bytes are fetched separately (authenticated) — see the
+  /// profile feature's `avatarBytesProvider`; this field only signals presence.
+  final String? avatarUrl;
 
   /// Display name for the profile menu — full name, falling back to username.
   String get displayName {
@@ -45,6 +51,7 @@ class AuthUser {
         firstName: json['firstName'] as String? ?? '',
         lastName: json['lastName'] as String? ?? '',
         cityId: (json['cityId'] as num?)?.toInt(),
+        avatarUrl: json['avatarUrl'] as String?,
         roles: ((json['roles'] as List?) ?? const <dynamic>[])
             .map((e) => e.toString())
             .toList(growable: false),
