@@ -208,6 +208,14 @@ final courtListControllerProvider =
     NotifierProvider<CourtListController, CourtListState>(
         CourtListController.new);
 
+/// A single court by id (F10 `GET /api/courts/{id}`), keyed by court id. Used by
+/// the client booking screen (F25) for its read-only court header — one call,
+/// versus reusing the heavier `courtDetailProvider` (which also loads amenities,
+/// reviews and review-eligibility).
+final courtByIdProvider = FutureProvider.family<Court, int>(
+  (ref, courtId) => ref.watch(courtRepositoryProvider).getById(courtId),
+);
+
 /// The maintenance windows (status history) for a court, newest-first (F12). The
 /// maintenance modal watches this; after a create/start/fix/cancel, invalidate
 /// `maintenanceHistoryProvider(courtId)` to refresh the timeline.
