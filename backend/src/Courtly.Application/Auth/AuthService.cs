@@ -1,5 +1,6 @@
 using Courtly.Application.Abstractions;
 using Courtly.Application.Common.Exceptions;
+using Courtly.Application.Courts.Media;
 using Courtly.Contracts.Auth;
 using Courtly.Domain.Constants;
 using Courtly.Domain.Entities;
@@ -229,6 +230,113 @@ public sealed class AuthService : IAuthService
         return ToUserInfo(user, roles);
     }
 
+    public async Task<UserInfoResponse> UpdateProfileAsync(
+        Guid userId, UpdateProfileRequest request, CancellationToken ct = default)
+    {
+        var user = await _userManager.FindByIdAsync(userId.ToString())
+            ?? throw new UnauthorizedException("Account not found.");
+
+        // City is optional but, when supplied, must reference a real row (FK guard with a field-keyed message).
+        if (request.CityId is not null && !await _db.Cities.AnyAsync(c => c.Id == request.CityId, ct))
+        {
+            throw new ValidationException(
+                "The selected city does not exist.",
+                new Dictionary<string, string[]> { ["cityId"] = new[] { "The selected city does not exist." } });
+        }
+
+        user.FirstName = request.FirstName;
+        user.LastName = request.LastName;
+        user.CityId = request.CityId;
+
+        // Email doubles as a login identifier. Only touch Identity's email fields when it actually changes;
+        // RequireUniqueEmail turns a collision into an IdentityError we surface below the Email field. UserName
+        // is left untouched — login accepts username-or-email, so the change never locks anyone out.
+        if (!string.Equals(user.Email, request.Email, StringComparison.OrdinalIgnoreCase))
+        {
+            var setEmail = await _userManager.SetEmailAsync(user, request.Email);
+            if (!setEmail.Succeeded)
+            {
+                throw new ValidationException(DescribeErrors(setEmail), ToFieldErrors(setEmail, "email"));
+            }
+        }
+
+        var updated = await _userManager.UpdateAsync(user);
+        if (!updated.Succeeded)
+        {
+            throw new ValidationException(DescribeErrors(updated), ToFieldErrors(updated, "email"));
+        }
+
+        var roles = await _userManager.GetRolesAsync(user);
+        _logger.LogInformation("User {UserId} updated their profile.", user.Id);
+        return ToUserInfo(user, roles);
+    }
+
+    public async Task ChangePasswordAsync(
+        Guid userId, ChangePasswordRequest request, CancellationToken ct = default)
+    {
+        var user = await _userManager.FindByIdAsync(userId.ToString())
+            ?? throw new UnauthorizedException("Account not found.");
+
+        // ChangePasswordAsync verifies the current password, enforces the policy, sets the new hash and rotates
+        // the security stamp in one call. A wrong current password comes back as PasswordMismatch → surface it
+        // under the currentPassword field (rubric §294); any policy failure belongs under newPassword.
+        var result = await _userManager.ChangePasswordAsync(user, request.CurrentPassword, request.NewPassword);
+        if (!result.Succeeded)
+        {
+            var mismatch = result.Errors.Any(e => e.Code == "PasswordMismatch");
+            if (mismatch)
+            {
+                const string message = "Current password is incorrect.";
+                throw new ValidationException(
+                    message,
+                    new Dictionary<string, string[]> { ["currentPassword"] = new[] { message } });
+            }
+
+            throw new ValidationException(DescribeErrors(result), ToFieldErrors(result, "newPassword"));
+        }
+
+        _logger.LogInformation("User {UserId} changed their password.", user.Id);
+    }
+
+    public async Task<UserInfoResponse> UpdateAvatarAsync(
+        Guid userId, byte[] bytes, string? contentType, CancellationToken ct = default)
+    {
+        var user = await _userManager.FindByIdAsync(userId.ToString())
+            ?? throw new UnauthorizedException("Account not found.");
+
+        // Reuse F11's content guard: MIME + magic bytes + size, throwing ValidationException(field "file") on
+        // any mismatch. Returns the normalized content-type we persist alongside the bytes.
+        var normalized = ImageContentValidator.Validate(contentType, bytes);
+        user.AvatarBytes = bytes;
+        user.AvatarContentType = normalized;
+
+        var updated = await _userManager.UpdateAsync(user);
+        if (!updated.Succeeded)
+        {
+            throw new ValidationException(DescribeErrors(updated), ToFieldErrors(updated, "file"));
+        }
+
+        var roles = await _userManager.GetRolesAsync(user);
+        _logger.LogInformation("User {UserId} updated their avatar ({Bytes} bytes).", user.Id, bytes.Length);
+        return ToUserInfo(user, roles);
+    }
+
+    public async Task<(byte[] Bytes, string ContentType)?> GetAvatarAsync(Guid userId, CancellationToken ct = default)
+    {
+        // Read-only, project just the two columns so we never materialize the whole user on the image path.
+        var avatar = await _userManager.Users
+            .Where(u => u.Id == userId)
+            .Select(u => new { u.AvatarBytes, u.AvatarContentType })
+            .FirstOrDefaultAsync(ct);
+
+        if (avatar?.AvatarBytes is null || avatar.AvatarContentType is null)
+        {
+            return null;
+        }
+
+        return (avatar.AvatarBytes, avatar.AvatarContentType);
+    }
+
     private async Task<AuthResponse> IssueTokensAsync(AppUser user, CancellationToken ct)
     {
         var roles = await _userManager.GetRolesAsync(user);
@@ -258,7 +366,9 @@ public sealed class AuthService : IAuthService
             user.FirstName,
             user.LastName,
             user.CityId,
-            roles.ToList());
+            roles.ToList(),
+            // Relative path only — bytes are streamed lazily by GET /api/auth/me/avatar, never inlined here.
+            user.AvatarBytes is null ? null : "/api/auth/me/avatar");
 
     private static string DescribeErrors(IdentityResult result) =>
         string.Join(" ", result.Errors.Select(e => e.Description));
