@@ -67,6 +67,15 @@ class ReservationRepository {
     }
   }
 
+  /// The signed-in customer books a slot for themselves (owner from the JWT).
+  Future<ReservationDetail> create({required int timeSlotId}) async {
+    try {
+      return await _api.create(timeSlotId: timeSlotId);
+    } on DioException catch (e) {
+      throw ApiException.from(e);
+    }
+  }
+
   Future<ReservationDetail> createForUser({
     required int timeSlotId,
     required String userId,

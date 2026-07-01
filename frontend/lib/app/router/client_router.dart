@@ -8,11 +8,14 @@ import '../../features/auth/presentation/auth_splash.dart';
 import '../../features/auth/presentation/client_login_screen.dart';
 import '../../features/auth/presentation/forgot_password_screen.dart';
 import '../../features/auth/presentation/register_screen.dart';
+import '../../features/client_booking/presentation/booking_created_screen.dart';
+import '../../features/client_booking/presentation/client_booking_screen.dart';
 import '../../features/client_home/presentation/client_home_screen.dart';
 import '../../features/court_detail/presentation/client_court_detail_screen.dart';
 import '../../features/court_detail/presentation/client_court_reviews_screen.dart';
 import '../../features/court_search/presentation/client_search_screen.dart';
 import '../../features/news/domain/news_models.dart';
+import '../../features/reservations/domain/reservation_models.dart';
 import '../../features/news/presentation/client_news_detail_screen.dart';
 import '../../features/placeholders/feature_placeholder.dart';
 import '../../features/profile/presentation/client_profile_screen.dart';
@@ -36,9 +39,15 @@ abstract final class ClientRoutes {
 
   /// Court detail (F24), pushed above the shell from a Home/Search court card.
   /// The court id travels in the path so the screen loads fresh data (rating,
-  /// reviews, eligibility). The nested `reviews` child is the full reviews list.
+  /// reviews, eligibility). The nested `reviews` child is the full reviews list;
+  /// the nested `booking` child is the F25 booking flow for that court.
   static String courtDetailPath(int courtId) => '/courts/$courtId';
   static String courtReviewsPath(int courtId) => '/courts/$courtId/reviews';
+  static String bookingPath(int courtId) => '/courts/$courtId/booking';
+
+  /// Post-confirm "pending" screen (F25). The created reservation rides along as
+  /// the route's `extra`; F26 will insert payment before this screen.
+  static const String bookingCreated = '/booking-created';
 }
 
 /// Builds the client mobile router with an auth guard, mirroring the admin router
@@ -118,7 +127,20 @@ final clientRouterProvider = Provider<GoRouter>((ref) {
               courtName: state.extra as String?,
             ),
           ),
+          GoRoute(
+            path: 'booking',
+            builder: (context, state) => ClientBookingScreen(
+              courtId: int.parse(state.pathParameters['id']!),
+            ),
+          ),
         ],
+      ),
+      // The F25 post-confirm "pending" screen, pushed after a successful create.
+      // The created reservation is passed as `extra`; "Done" returns to Home.
+      GoRoute(
+        path: ClientRoutes.bookingCreated,
+        builder: (context, state) =>
+            BookingCreatedScreen(reservation: state.extra as Reservation?),
       ),
       StatefulShellRoute.indexedStack(
         builder: (context, state, navigationShell) =>

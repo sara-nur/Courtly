@@ -131,7 +131,7 @@ void main() {
     expect(find.text('Book Now'), findsOneWidget);
   });
 
-  testWidgets('Book Now is disabled until the booking flow exists',
+  testWidgets('Book Now is enabled (opens the F25 booking flow) when bookable',
       (tester) async {
     await pumpDetail(tester, canReview: false);
 
@@ -141,7 +141,7 @@ void main() {
         matching: find.byType(DisabledAction),
       ),
     );
-    expect(disabled.enabled, isFalse);
+    expect(disabled.enabled, isTrue);
   });
 
   testWidgets('hides "Write a review" when the user is not eligible',

@@ -10,7 +10,9 @@ import '../domain/reservation_models.dart';
 ///
 /// Endpoints (must match the backend exactly):
 ///   GET  /api/reservations              (admin list — paged + filters)     [Admin/Staff]
+///   GET  /api/reservations/mine         (the signed-in customer's own — paged)
 ///   GET  /api/reservations/{id}         (detail = reservation+audits+payment)
+///   POST /api/reservations              ({timeSlotId} → the signed-in customer books; owner from JWT)
 ///   POST /api/reservations/admin        ({timeSlotId, userId} → book for a customer) [Admin/Staff]
 ///   POST /api/reservations/{id}/confirm                                    [Admin/Staff]
 ///   POST /api/reservations/{id}/cancel  ({reason})
@@ -70,6 +72,17 @@ class ReservationApi {
 
   Future<ReservationDetail> getById(int id) async {
     final response = await _dio.get<dynamic>('$_base/$id');
+    return ReservationDetail.fromJson((response.data as Map).cast<String, dynamic>());
+  }
+
+  /// The signed-in customer books a slot for themselves (POST `/api/reservations`).
+  /// The body carries only the slot id — the backend derives the owner from the
+  /// JWT and the price from the slot catalog (never trusted from the client).
+  Future<ReservationDetail> create({required int timeSlotId}) async {
+    final response = await _dio.post<dynamic>(
+      _base,
+      data: <String, dynamic>{'timeSlotId': timeSlotId},
+    );
     return ReservationDetail.fromJson((response.data as Map).cast<String, dynamic>());
   }
 

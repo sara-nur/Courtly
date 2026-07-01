@@ -147,7 +147,11 @@ class _CourtDetailView extends ConsumerWidget {
           ),
         ],
       ),
-      bottomNavigationBar: _BookingBar(hourlyPrice: court.hourlyPrice),
+      bottomNavigationBar: _BookingBar(
+        courtId: courtId,
+        hourlyPrice: court.hourlyPrice,
+        isUnderMaintenance: court.isUnderMaintenance,
+      ),
     );
   }
 }
@@ -454,12 +458,20 @@ class _ReviewsSection extends StatelessWidget {
   }
 }
 
-/// The sticky bottom bar: total price (one hour) + a disabled "Book Now" (the
-/// booking flow lands in F25, so the control is present but not yet wired).
+/// The sticky bottom bar: total price (one hour) + "Book Now", which opens the
+/// F25 booking flow for this court. It stays disabled (with a reason) while the
+/// court is under maintenance — a maintenance court has no bookable slots and the
+/// backend would reject a booking anyway.
 class _BookingBar extends StatelessWidget {
-  const _BookingBar({required this.hourlyPrice});
+  const _BookingBar({
+    required this.courtId,
+    required this.hourlyPrice,
+    required this.isUnderMaintenance,
+  });
 
+  final int courtId;
   final double hourlyPrice;
+  final bool isUnderMaintenance;
 
   @override
   Widget build(BuildContext context) {
@@ -494,10 +506,11 @@ class _BookingBar extends StatelessWidget {
               ),
               const Spacer(),
               DisabledAction(
-                enabled: false,
-                reason: 'Booking opens in a later update',
+                enabled: !isUnderMaintenance,
+                reason: 'This court is under maintenance and can\'t be booked',
                 child: FilledButton.icon(
-                  onPressed: () {},
+                  onPressed: () =>
+                      context.push(ClientRoutes.bookingPath(courtId)),
                   icon: const Icon(Icons.arrow_forward),
                   label: const Text('Book Now'),
                 ),
