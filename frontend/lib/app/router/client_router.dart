@@ -9,6 +9,8 @@ import '../../features/auth/presentation/client_login_screen.dart';
 import '../../features/auth/presentation/forgot_password_screen.dart';
 import '../../features/auth/presentation/register_screen.dart';
 import '../../features/client_home/presentation/client_home_screen.dart';
+import '../../features/court_detail/presentation/client_court_detail_screen.dart';
+import '../../features/court_detail/presentation/client_court_reviews_screen.dart';
 import '../../features/court_search/presentation/client_search_screen.dart';
 import '../../features/news/domain/news_models.dart';
 import '../../features/news/presentation/client_news_detail_screen.dart';
@@ -31,6 +33,12 @@ abstract final class ClientRoutes {
   /// Full-screen article reader, pushed above the bottom-nav shell from the
   /// Home news feed. The [News] article rides along as the route's `extra`.
   static const String newsDetail = '/news-detail';
+
+  /// Court detail (F24), pushed above the shell from a Home/Search court card.
+  /// The court id travels in the path so the screen loads fresh data (rating,
+  /// reviews, eligibility). The nested `reviews` child is the full reviews list.
+  static String courtDetailPath(int courtId) => '/courts/$courtId';
+  static String courtReviewsPath(int courtId) => '/courts/$courtId/reviews';
 }
 
 /// Builds the client mobile router with an auth guard, mirroring the admin router
@@ -94,6 +102,23 @@ final clientRouterProvider = Provider<GoRouter>((ref) {
         path: ClientRoutes.newsDetail,
         builder: (context, state) =>
             ClientNewsDetailScreen(news: state.extra as News?),
+      ),
+      // Court detail + its reviews list, pushed full-screen above the shell (so
+      // both get the standard back button). The court id comes from the path.
+      GoRoute(
+        path: '/courts/:id',
+        builder: (context, state) => ClientCourtDetailScreen(
+          courtId: int.parse(state.pathParameters['id']!),
+        ),
+        routes: [
+          GoRoute(
+            path: 'reviews',
+            builder: (context, state) => ClientCourtReviewsScreen(
+              courtId: int.parse(state.pathParameters['id']!),
+              courtName: state.extra as String?,
+            ),
+          ),
+        ],
       ),
       StatefulShellRoute.indexedStack(
         builder: (context, state, navigationShell) =>

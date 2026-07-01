@@ -222,8 +222,13 @@ class _FeaturedCourtsSection extends StatelessWidget {
               itemCount: courts.length,
               separatorBuilder: (_, __) =>
                   const SizedBox(width: AppSpacing.sm),
-              itemBuilder: (context, index) =>
-                  ClientCourtCard(court: courts[index], width: cardWidth),
+              itemBuilder: (context, index) => ClientCourtCard(
+                court: courts[index],
+                width: cardWidth,
+                onTap: () => context.push(
+                  ClientRoutes.courtDetailPath(courts[index].id),
+                ),
+              ),
             ),
           ),
       ],
