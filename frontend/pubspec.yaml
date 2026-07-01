@@ -34,6 +34,12 @@ dependencies:
   printing: ^5.13.0
   # PdfPageFormat type used by the printing preview/layout callback — F20
   pdf: ^3.11.1
+  # In-app Stripe PaymentSheet for the client booking payment — F26.
+  # The publishable key is supplied at runtime from the server's intent
+  # response (never hardcoded — rubric §3.3).
+  flutter_stripe: ^11.5.0
+  # "Add to Calendar" on the paid confirmation receipt — F26.
+  add_2_calendar: ^3.0.1
 
 dev_dependencies:
   flutter_test:
