@@ -20,6 +20,11 @@ public interface ICourtService
     /// <summary>Single court by id; throws <c>NotFoundException</c> if it does not exist.</summary>
     Task<CourtDto> GetByIdAsync(long id, CancellationToken ct = default);
 
+    /// <summary>The courts with the given ids projected to <see cref="CourtDto"/> in a single query (order not
+    /// guaranteed — the caller re-orders). Missing ids are simply absent. Read-only; reuses the same nav-JOIN
+    /// projection as the list path so callers (e.g. the F29 recommender) never re-implement it.</summary>
+    Task<IReadOnlyList<CourtDto>> GetByIdsAsync(IReadOnlyCollection<long> ids, CancellationToken ct = default);
+
     Task<CourtDto> CreateAsync(CreateCourtRequest request, CancellationToken ct = default);
 
     Task<CourtDto> UpdateAsync(long id, UpdateCourtRequest request, CancellationToken ct = default);

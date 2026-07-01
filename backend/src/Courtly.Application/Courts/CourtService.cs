@@ -136,6 +136,21 @@ public sealed class CourtService : ICourtService
         return row is null ? throw new NotFoundException($"Court {id} was not found.") : ToDto(row);
     }
 
+    public async Task<IReadOnlyList<CourtDto>> GetByIdsAsync(
+        IReadOnlyCollection<long> ids, CancellationToken ct = default)
+    {
+        if (ids.Count == 0)
+        {
+            return [];
+        }
+
+        // Single translated query over the shared projection (no N+1); order is the caller's concern.
+        var rows = await Project(_db.Courts.AsNoTracking().Where(c => ids.Contains(c.Id)), _clock.UtcNow, _db.Reviews)
+            .ToListAsync(ct);
+
+        return rows.Select(ToDto).ToList();
+    }
+
     public async Task<CourtDto> CreateAsync(CreateCourtRequest request, CancellationToken ct = default)
     {
         var name = request.Name.Trim();
