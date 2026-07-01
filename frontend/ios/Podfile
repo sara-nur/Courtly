@@ -1,5 +1,6 @@
-# Uncomment this line to define a global platform for your project
-# platform :ios, '13.0'
+# flutter_stripe (F26) requires an iOS 13.0+ deployment target; pin it globally
+# so every pod builds against it (the Runner target is already 13.0).
+platform :ios, '13.0'
 
 # CocoaPods analytics sends network stats synchronously affecting flutter build latency.
 ENV['COCOAPODS_DISABLE_STATS'] = 'true'

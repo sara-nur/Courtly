@@ -40,6 +40,12 @@ kotlin {
     }
 }
 
+dependencies {
+    // Provides the Theme.MaterialComponents.* parents used by NormalTheme, which
+    // flutter_stripe's PaymentSheet (F26) requires as its host activity theme.
+    implementation("com.google.android.material:material:1.12.0")
+}
+
 flutter {
     source = "../.."
 }

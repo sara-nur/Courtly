@@ -83,9 +83,9 @@ void main() {
             ),
           ),
           GoRoute(
-            path: ClientRoutes.bookingCreated,
+            path: ClientRoutes.payment,
             builder: (context, state) =>
-                const Scaffold(body: Text('created-screen')),
+                const Scaffold(body: Text('payment-screen')),
           ),
         ],
       );
@@ -162,10 +162,10 @@ void main() {
     await tester.tap(find.text('Confirm booking'));
     await tester.pumpAndSettle();
 
-    // Created exactly once with the selected slot id, then routed onward.
+    // Created exactly once with the selected slot id, then routed to payment.
     expect(repo.createCalls, 1);
     expect(repo.lastSlotId, 101);
-    expect(find.text('created-screen'), findsOneWidget);
+    expect(find.text('payment-screen'), findsOneWidget);
   });
 }
 

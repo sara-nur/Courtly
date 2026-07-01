@@ -87,7 +87,9 @@ class _ClientBookingScreenState extends ConsumerState<ClientBookingScreen> {
       // reload. Home is kept alive in the shell's IndexedStack, so invalidating
       // now re-fetches it before we navigate back.
       ref.invalidate(homeDataProvider);
-      context.push(ClientRoutes.bookingCreated, extra: created);
+      // F26: hand off to payment. The screen pays the Pending reservation and
+      // flips to the paid confirmation receipt.
+      context.push(ClientRoutes.payment, extra: created);
     } else {
       final error = ref.read(bookingControllerProvider).error;
       final message = error is ApiException

@@ -4,6 +4,13 @@
 <dict>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
+	<!-- Add-to-Calendar (F26): add_2_calendar opens the system event editor via
+	     EventKit. iOS 17+ split calendar access, so declare both the legacy full
+	     key and the write-only key. -->
+	<key>NSCalendarsUsageDescription</key>
+	<string>Courtly adds your court booking to your calendar.</string>
+	<key>NSCalendarsWriteOnlyAccessUsageDescription</key>
+	<string>Courtly adds your court booking to your calendar.</string>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<!-- Dev only: allow cleartext HTTP to the local API (http://localhost:5000)
@@ -44,27 +51,10 @@
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
-	<key>UIApplicationSceneManifest</key>
-	<dict>
-		<key>UIApplicationSupportsMultipleScenes</key>
-		<false/>
-		<key>UISceneConfigurations</key>
-		<dict>
-			<key>UIWindowSceneSessionRoleApplication</key>
-			<array>
-				<dict>
-					<key>UISceneClassName</key>
-					<string>UIWindowScene</string>
-					<key>UISceneConfigurationName</key>
-					<string>flutter</string>
-					<key>UISceneDelegateClassName</key>
-					<string>$(PRODUCT_MODULE_NAME).SceneDelegate</string>
-					<key>UISceneStoryboardFile</key>
-					<string>Main</string>
-				</dict>
-			</array>
-		</dict>
-	</dict>
+	<!-- Scene lifecycle intentionally omitted: flutter_stripe (F26) presents the
+	     PaymentSheet from the app delegate's window, which is nil under the
+	     scene-based lifecycle. Using the classic UIApplicationDelegate window
+	     (see AppDelegate.swift) so the sheet can present. -->
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>UILaunchStoryboardName</key>

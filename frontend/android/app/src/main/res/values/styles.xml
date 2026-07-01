@@ -11,8 +11,12 @@
          Flutter UI initializes, as well as behind your Flutter UI while its
          running.
 
-         This Theme is only used starting with V2 of Flutter's Android embedding. -->
-    <style name="NormalTheme" parent="@android:style/Theme.Light.NoTitleBar">
+         This Theme is only used starting with V2 of Flutter's Android embedding.
+
+         Parent is a MaterialComponents theme (not the framework NoTitleBar one)
+         because flutter_stripe's native PaymentSheet (F26) is hosted in this
+         activity and requires a Material/AppCompat theme context. -->
+    <style name="NormalTheme" parent="Theme.MaterialComponents.Light.NoActionBar">
         <item name="android:windowBackground">?android:colorBackground</item>
     </style>
 </resources>
