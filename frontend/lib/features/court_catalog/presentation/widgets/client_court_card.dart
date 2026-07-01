@@ -8,19 +8,23 @@ import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/utils/image_urls.dart';
 import '../../domain/court_models.dart';
 
-/// DISPLAY-ONLY client card for one [Court], matching the mobile mockup: the
-/// court image fills the top, a rating badge floats top-right (only when the
-/// court has a rating), a surface-type chip floats over the image, and the
-/// court name + hourly price sit below.
+/// Client card for one [Court], matching the mobile mockup: the court image
+/// fills the top, a rating badge floats top-right (only when the court has a
+/// rating), a surface-type chip floats over the image, and the court name +
+/// hourly price sit below.
 ///
-/// This is intentionally tap-less — court detail navigation is deferred to F24.
-/// [width] is optional so the same card works both in a fixed-width horizontal
-/// carousel and as a full-width list item (null → it fills its parent).
+/// Tapping opens the court detail screen (F24) when [onTap] is supplied; the
+/// card stays navigation-agnostic (the caller wires the route). [width] is
+/// optional so the same card works both in a fixed-width horizontal carousel and
+/// as a full-width list item (null → it fills its parent).
 class ClientCourtCard extends ConsumerWidget {
-  const ClientCourtCard({super.key, required this.court, this.width});
+  const ClientCourtCard({super.key, required this.court, this.width, this.onTap});
 
   final Court court;
   final double? width;
+
+  /// Opens the court detail when tapped; null leaves the card non-interactive.
+  final VoidCallback? onTap;
 
   /// Banner height for the top image.
   static const double _imageHeight = 150;
@@ -35,7 +39,9 @@ class ClientCourtCard extends ConsumerWidget {
         color: AppColors.surface,
         clipBehavior: Clip.antiAlias,
         borderRadius: AppSpacing.brLg,
-        child: Column(
+        child: InkWell(
+          onTap: onTap,
+          child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -81,6 +87,7 @@ class ClientCourtCard extends ConsumerWidget {
               ),
             ),
           ],
+          ),
         ),
       ),
     );

@@ -111,6 +111,7 @@ builder.Services.AddCourtlyDashboard();       // F19: dashboard analytics (KPIs,
 builder.Services.AddCourtlyReports();         // F20: downloadable/printable PDF reports (reconcile with F19)
 builder.Services.AddCourtlyNews();            // F21: news / announcements CRUD + client published-read
 builder.Services.AddCourtlySearchHistory();   // F23: search-history capture (recommender signal)
+builder.Services.AddCourtlyReviews();         // F24: court reviews (read list + completed-only write + eligibility)
 
 // F18: stateless verifier for the "InternalKey" policy — the Worker authenticates to /api/internal/push on the
 // shared X-Internal-Key secret alone (no JWT). Singleton: it holds no per-request state.

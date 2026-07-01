@@ -2,7 +2,9 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
+import '../../../app/router/client_router.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/widgets/app_text_field.dart';
@@ -124,7 +126,11 @@ class _ClientSearchScreenState extends ConsumerState<ClientSearchScreen> {
               onPreviousPage: controller.previousPage,
               padding: const EdgeInsets.all(AppSpacing.md),
               separator: const SizedBox(height: AppSpacing.md),
-              itemBuilder: (context, court, _) => ClientCourtCard(court: court),
+              itemBuilder: (context, court, _) => ClientCourtCard(
+                court: court,
+                onTap: () =>
+                    context.push(ClientRoutes.courtDetailPath(court.id)),
+              ),
               emptyPlaceholder: const _EmptyResults(),
             ),
           ),
