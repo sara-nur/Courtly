@@ -26,6 +26,15 @@ void main() {
   const sarajevo = City(id: 1, name: 'Sarajevo', countryId: 1, countryName: 'Bosnia');
 
   Future<_FakeProfileRepository> pumpProfile(WidgetTester tester) async {
+    // The profile form is a tall column (name/email/city, avatar, the
+    // change-password toggle + fields); a tall viewport keeps the toggle and the
+    // revealed fields on-screen so tap()/enterText() hit them (default 800x600
+    // would leave the SwitchListTile just below the fold).
+    tester.view.physicalSize = const Size(1200, 2400);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
     final repo = _FakeProfileRepository();
     await tester.pumpWidget(
       ProviderScope(

@@ -20,5 +20,12 @@ public class RecommendationFeedbackConfiguration : IEntityTypeConfiguration<Reco
             .WithMany()
             .HasForeignKey(x => x.CourtId)
             .OnDelete(DeleteBehavior.Restrict);
+
+        // One feedback row per (user, court): the recommender upserts on Yes/No, and this index also serves the
+        // per-user feedback read on every recommendation fetch. Unique so a double-tap can never create duplicate
+        // rows (feature 29).
+        builder.HasIndex(x => new { x.UserId, x.CourtId })
+            .IsUnique()
+            .HasDatabaseName("ix_recommendation_feedback_user_court");
     }
 }

@@ -22,6 +22,7 @@ import '../../features/notifications/presentation/notifications_screen.dart';
 import '../../features/payments/presentation/payment_screen.dart';
 import '../../features/placeholders/feature_placeholder.dart';
 import '../../features/profile/presentation/client_profile_screen.dart';
+import '../../features/recommendations/presentation/recommendations_screen.dart';
 import '../shell/client_shell.dart';
 
 /// Client route paths (single source — rubric §3.4: no scattered string literals).
@@ -57,6 +58,10 @@ abstract final class ClientRoutes {
   /// the Pending reservation. The created reservation rides along as the route's
   /// `extra`; the screen shows the pay flow, then flips to the paid receipt.
   static const String payment = '/payment';
+
+  /// Recommendations screen (F29), pushed above the shell from the Home tab. The
+  /// screen fetches the current user's explainable recommendations fresh.
+  static const String recommendations = '/recommendations';
 }
 
 /// Builds the client mobile router with an auth guard, mirroring the admin router
@@ -159,6 +164,12 @@ final clientRouterProvider = Provider<GoRouter>((ref) {
         path: ClientRoutes.payment,
         builder: (context, state) =>
             PaymentScreen(reservation: state.extra as Reservation?),
+      ),
+      // Recommendations, pushed full-screen above the shell from the Home tab (so
+      // it gets the standard back button). The screen loads the user's picks.
+      GoRoute(
+        path: ClientRoutes.recommendations,
+        builder: (context, state) => const ClientRecommendationsScreen(),
       ),
       StatefulShellRoute.indexedStack(
         builder: (context, state, navigationShell) =>

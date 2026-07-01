@@ -53,6 +53,13 @@ class ClientHomeScreen extends ConsumerWidget {
             padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
             child: _FilterChips(onTap: () => context.go(ClientRoutes.search)),
           ),
+          const SizedBox(height: AppSpacing.lg),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+            child: _RecommendedForYouBanner(
+              onTap: () => context.push(ClientRoutes.recommendations),
+            ),
+          ),
           const SizedBox(height: AppSpacing.xl),
           _FeaturedCourtsSection(
             courts: data.featuredCourts,
@@ -83,6 +90,59 @@ class _Hero extends StatelessWidget {
       style: theme.textTheme.headlineMedium?.copyWith(
         fontWeight: FontWeight.w800,
         color: AppColors.textPrimary,
+      ),
+    );
+  }
+}
+
+/// The "Recommended For You" entry — a prominent, on-brand banner that opens the
+/// full recommendations screen (F29). It is the Home surfacing of the app's smart
+/// recommender (mockup p.10): a single tappable CTA rather than a new bottom-nav
+/// tab, so the existing five-tab shell is unchanged.
+class _RecommendedForYouBanner extends StatelessWidget {
+  const _RecommendedForYouBanner({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Material(
+      color: AppColors.primary,
+      borderRadius: AppSpacing.brLg,
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: AppSpacing.cardPadding,
+          child: Row(
+            children: [
+              const Icon(Icons.auto_awesome, color: AppColors.onPrimary),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'Recommended For You',
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        color: AppColors.onPrimary,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.xxs),
+                    Text(
+                      'Smart picks based on how you play',
+                      style: theme.textTheme.bodySmall?.copyWith(color: Colors.white70),
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(Icons.arrow_forward, color: AppColors.onPrimary),
+            ],
+          ),
+        ),
       ),
     );
   }
