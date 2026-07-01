@@ -40,6 +40,9 @@ dependencies:
   flutter_stripe: ^11.5.0
   # "Add to Calendar" on the paid confirmation receipt — F26.
   add_2_calendar: ^3.0.1
+  # SignalR client for the real-time notifications channel (JWT carried on the
+  # ?access_token query string); REST polling is the committed fallback — F27.
+  signalr_netcore: ^1.3.3
 
 dev_dependencies:
   flutter_test:

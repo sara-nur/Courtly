@@ -16,6 +16,9 @@ import '../../features/court_search/presentation/client_search_screen.dart';
 import '../../features/news/domain/news_models.dart';
 import '../../features/reservations/domain/reservation_models.dart';
 import '../../features/news/presentation/client_news_detail_screen.dart';
+import '../../features/notifications/domain/notification_models.dart';
+import '../../features/notifications/presentation/notification_detail_screen.dart';
+import '../../features/notifications/presentation/notifications_screen.dart';
 import '../../features/payments/presentation/payment_screen.dart';
 import '../../features/placeholders/feature_placeholder.dart';
 import '../../features/profile/presentation/client_profile_screen.dart';
@@ -36,6 +39,11 @@ abstract final class ClientRoutes {
   /// Full-screen article reader, pushed above the bottom-nav shell from the
   /// Home news feed. The [News] article rides along as the route's `extra`.
   static const String newsDetail = '/news-detail';
+
+  /// Full-screen notification reader, pushed above the shell when a row on the
+  /// Notifications tab is tapped. The tapped notification rides along as `extra`
+  /// (the list already holds the full record, so no by-id refetch).
+  static const String notificationDetail = '/notification-detail';
 
   /// Court detail (F24), pushed above the shell from a Home/Search court card.
   /// The court id travels in the path so the screen loads fresh data (rating,
@@ -113,6 +121,14 @@ final clientRouterProvider = Provider<GoRouter>((ref) {
         builder: (context, state) =>
             ClientNewsDetailScreen(news: state.extra as News?),
       ),
+      // Full-screen notification detail, pushed above the shell from the
+      // Notifications tab. The tapped notification is passed as `extra`.
+      GoRoute(
+        path: ClientRoutes.notificationDetail,
+        builder: (context, state) => NotificationDetailScreen(
+          notification: state.extra as AppNotification?,
+        ),
+      ),
       // Court detail + its reviews list, pushed full-screen above the shell (so
       // both get the standard back button). The court id comes from the path.
       GoRoute(
@@ -160,11 +176,7 @@ final clientRouterProvider = Provider<GoRouter>((ref) {
           ),
           _branch(
             ClientRoutes.notifications,
-            const FeaturePlaceholder(
-              title: 'Notifications',
-              subtitle: 'Updates about your reservations.',
-              icon: Icons.notifications_none,
-            ),
+            const ClientNotificationsScreen(),
           ),
           _branch(ClientRoutes.profile, const ClientProfileScreen()),
         ],
