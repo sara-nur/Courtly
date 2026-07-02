@@ -2,6 +2,8 @@
 /// reusable Courtly widgets:
 ///
 /// `import 'package:courtly/core/widgets/widgets.dart';`
+library;
+
 export 'app_back_button.dart';
 export 'app_text_field.dart';
 export 'async_value_view.dart';

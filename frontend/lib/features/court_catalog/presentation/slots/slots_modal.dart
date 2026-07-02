@@ -322,7 +322,7 @@ class _SlotsModalState extends ConsumerState<_SlotsModal> {
               const SizedBox(width: AppSpacing.sm),
               Expanded(
                 child: DropdownButtonFormField<int>(
-                  value: _slotMinutes,
+                  initialValue: _slotMinutes,
                   decoration: const InputDecoration(labelText: 'Slot length', isDense: true),
                   items: [
                     for (final m in _slotLengths)
@@ -438,7 +438,7 @@ class _HourDropdown extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return DropdownButtonFormField<int>(
-      value: value,
+      initialValue: value,
       decoration: InputDecoration(labelText: label, isDense: true),
       items: [
         for (var h = min; h <= max; h++)

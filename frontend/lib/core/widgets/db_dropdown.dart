@@ -49,7 +49,7 @@ class DbDropdown<T> extends StatelessWidget {
     final bool isEnabled = enabled && hasOptions;
 
     return DropdownButtonFormField<T>(
-      value: value,
+      initialValue: value,
       isExpanded: true,
       items: [
         for (final item in items)

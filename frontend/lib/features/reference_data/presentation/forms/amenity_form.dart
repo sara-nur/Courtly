@@ -148,6 +148,25 @@ class _AmenityFormState extends ConsumerState<_AmenityForm> {
             onPressed: _submitting ? null : () => Navigator.of(context).pop(),
           ),
           onClose: _submitting ? null : () => Navigator.of(context).pop(),
+          actions: [
+            TextButton(
+              onPressed: _submitting ? null : () => Navigator.of(context).pop(),
+              child: const Text('Cancel'),
+            ),
+            SizedBox(
+              height: AppSpacing.inputHeight,
+              child: ElevatedButton(
+                onPressed: _submitting ? null : _submit,
+                child: _submitting
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2.5),
+                      )
+                    : Text(_isEdit ? 'Save changes' : 'Create'),
+              ),
+            ),
+          ],
           children: [
             AppTextField(
               controller: _nameController,
@@ -168,25 +187,6 @@ class _AmenityFormState extends ConsumerState<_AmenityForm> {
               autovalidateMode: AutovalidateMode.onUserInteraction,
               onChanged: (_) => _clearServerError(_iconKeyField),
               validator: _validateIconKey,
-            ),
-          ],
-          actions: [
-            TextButton(
-              onPressed: _submitting ? null : () => Navigator.of(context).pop(),
-              child: const Text('Cancel'),
-            ),
-            SizedBox(
-              height: AppSpacing.inputHeight,
-              child: ElevatedButton(
-                onPressed: _submitting ? null : _submit,
-                child: _submitting
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2.5),
-                      )
-                    : Text(_isEdit ? 'Save changes' : 'Create'),
-              ),
             ),
           ],
         ),
