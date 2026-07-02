@@ -16,9 +16,54 @@ docker-compose.yml   # (added in feature 2) postgres, rabbitmq, api, worker
 
 ## Prerequisites
 
+> **Just testing the app?** You only need **Docker Desktop** (plus an **Android emulator** for the mobile app).
+> No Flutter, Visual Studio, or .NET SDK required — jump to **[Testing on Windows](#testing-on-windows-no-build-tools)**.
+> The list below is for **building / developing** from source.
+
 - .NET 10 SDK (LTS)
-- Flutter (stable) with the **desktop toolchain for your OS** — **Windows** (Visual Studio 2022 with the "Desktop development with C++" workload) or **macOS** (Xcode) — plus the **Android** toolchain for the mobile client (and optionally iOS on macOS)
+- Flutter (stable, **3.35+**) with the **desktop toolchain for your OS** — **Windows** (Visual Studio 2022 with the "Desktop development with C++" workload, **including the C++ ATL component**) or **macOS** (Xcode) — plus the **Android** toolchain for the mobile client (and optionally iOS on macOS)
 - Docker + Docker Compose (Docker Desktop on Windows/macOS)
+
+## Testing on Windows (no build tools)
+
+Fastest way to try the app — **no Flutter, no Visual Studio, no .NET SDK**, just **Docker Desktop**
+(and an **Android emulator** for the mobile app). Everything runs from the GitHub Release + Docker.
+All commands are **PowerShell**. Don't `flutter run` / rebuild to test — the prebuilt binaries avoid the
+whole Windows toolchain (Flutter version, C++ build tools, ATL, …).
+
+**1. Config** — get the ready-to-run `.env` from the `.env-tajne.zip` you received:
+```powershell
+tar -xf .env-tajne.zip            # password: fit  → creates .env at the repo root
+```
+
+**2. Backend** — Docker builds and runs it (no .NET SDK needed):
+```powershell
+docker compose up --build         # API on http://localhost:5000
+curl http://localhost:5000/health # must respond before opening the apps
+```
+
+**3. Desktop admin** — download `fit-build-<date>.zip` from the Release, then run the prebuilt `.exe`:
+```powershell
+Expand-Archive .\fit-build-<date>.zip .\courtly-build -Force
+.\courtly-build\desktop\build\windows\x64\runner\Release\courtly.exe
+```
+Sign in `desktop` / `test`.
+
+**4. Mobile client** — Android emulator + the prebuilt APK:
+```powershell
+winget install --id Google.AndroidStudio    # once; then open it → Device Manager → create & start an emulator
+# with the emulator booted (Android home screen visible):
+& "$env:LOCALAPPDATA\Android\Sdk\platform-tools\adb.exe" devices    # expect: emulator-5554   device
+& "$env:LOCALAPPDATA\Android\Sdk\platform-tools\adb.exe" install ".\courtly-build\mobile\build\app\outputs\flutter-apk\app-release.apk"
+```
+Open **Courtly** in the emulator, sign in `mobile` / `test`.
+
+**Gotchas**
+- **Order matters:** backend up (`/health` responds) → *then* open the apps.
+- **`adb` "not recognized":** it isn't on PATH — call it by full path as shown (`…\Android\Sdk\platform-tools\adb.exe`).
+- **Use a Google emulator** (it maps `10.0.2.2` → your PC's `localhost`, where the API runs). Physical phones / BlueStacks won't reach the backend without rebuilding the APK.
+- **"Change photo" shows nothing:** a fresh emulator has an empty gallery — drag any image onto the emulator window first, then pick it.
+- **Stripe test card:** `4242 4242 4242 4242`, any future expiry, any CVC/ZIP.
 
 ## Running
 
@@ -132,15 +177,17 @@ flutter build apk     --release -t lib/main_client.dart --dart-define=API_BASE_U
 ZIP contents, then **Publish**. Submit the tag-specific release link
 (`…/releases/tag/predaja-YYYY-MM-DD`), never `releases/latest`.
 
-**Secrets.** The `.env` is git-ignored. For grading, ship the working config as a
-password-protected archive alongside it:
+**Secrets.** The `.env` is git-ignored and lives only on your machine. For grading, package the
+working config as a password-protected archive:
 
 ```bash
 zip -P fit .env-tajne.zip .env      # password: fit
 ```
 
-`.env-tajne.zip` is git-ignored too; `git add -f .env-tajne.zip` to include it in the repo, and
-submit the password (`fit`) separately. Never put a plain `.env` in a release.
+Submit `.env-tajne.zip` **only through the private DL system** (with the password `fit`). It is
+git-ignored, and it must **never** be committed to this public repo or attached to a GitHub Release —
+with a known password, a public archive exposes every secret. Never put a plain `.env` anywhere public
+either.
 
 **Clean-environment run** (what a grader does): fresh clone → `unzip -P fit .env-tajne.zip` →
 `docker compose up --build` → all four services healthy, log in with the credentials above —

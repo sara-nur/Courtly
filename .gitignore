@@ -4,7 +4,10 @@
 .env
 .env.*
 !.env.example
-.env-tajne.zip          # encrypted secrets archive for submission — force-add (git add -f) only when submitting
+# Encrypted secrets archive — submit via the private DL system only.
+# NEVER commit it to this public repo or attach it to a release (the password is known).
+.env-tajne.zip
+*-tajne.zip
 
 # Local-only working notes (not part of the public submission)
 docs/plans/

@@ -18,7 +18,7 @@ import '../application/profile_providers.dart';
 
 /// Client **Profile** tab (feature 28). Lets the signed-in user edit their own
 /// personal data (name, email, city) and profile image, change their password
-/// behind an "Izmijeni lozinku" toggle (rubric §294 — the current password must
+/// behind a "Change password" toggle (rubric §294 — the current password must
 /// be confirmed), and sign out. Profile edit and password change are two
 /// independent forms, so saving the profile never requires the password fields
 /// (rubric §288/§290) and validation messages render **below** each control.
@@ -405,8 +405,8 @@ class _ClientProfileScreenState extends ConsumerState<ClientProfileScreen> {
       children: [
         SwitchListTile(
           contentPadding: EdgeInsets.zero,
-          title: const Text('Izmijeni lozinku'),
-          subtitle: const Text('Change your password'),
+          title: const Text('Change password'),
+          subtitle: const Text('Update your account password'),
           value: _changingPassword,
           onChanged: _savingPassword
               ? null
