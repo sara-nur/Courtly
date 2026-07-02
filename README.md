@@ -1,194 +1,236 @@
 # Courtly
 
-Tennis-court reservation system
+**A tennis-court reservation and management system.**
 
-A .NET 10 REST API + separate RabbitMQ worker over PostgreSQL, with a single Flutter project producing a **desktop admin app** and a **mobile client app**.
+Players discover, book, and pay for tennis courts from a **mobile app**; administrators manage courts, reservations, users, and reporting from a **desktop app**. Courtly is built as a small microservice system — a .NET 10 REST API and a separate background worker communicate over RabbitMQ, backed by PostgreSQL — with a single Flutter codebase producing both front-ends.
 
-## Repository layout
+---
+
+## Overview
+
+**Two applications, one Flutter project:**
+
+- **Mobile client (Android)** — browse and search courts, view court details and reviews, book a time slot, pay in-app with Stripe, manage bookings (history, cancel, refund), receive live notifications, edit profile, and get explainable court recommendations.
+- **Desktop admin (Windows)** — dashboard with KPIs and charts, reservation management, court catalog with images/amenities/map location, user management, reference-data CRUD, downloadable and printable PDF reports, and news management.
+
+**Backend highlights:**
+
+- JWT authentication with role-based authorization (**Admin / Staff / User**).
+- Centralized reservation state machine (Pending → Confirmed → Completed / Cancelled) with an audit trail and server-side overlap protection.
+- Server-side Stripe payments (sandbox), finalized via webhook, including refunds.
+- Real-time notifications over SignalR with a polling fallback; transactional emails handled by the worker.
+- Content-based + popularity recommender with human-readable explanations.
+
+## Architecture
 
 ```
-backend/    # .NET 10 solution — Domain, Contracts, Infrastructure, Application, Api, Worker, Tests
-frontend/   # single Flutter project — main_admin.dart (desktop) + main_client.dart (mobile)
-docs/        # build plan, feature roadmap, resources
-docker-compose.yml   # (added in feature 2) postgres, rabbitmq, api, worker
-.env.example         # documented config keys — copy to .env and fill in
+  Flutter apps ──HTTP / JWT──▶  Courtly.Api  ──publish──▶  RabbitMQ  ──consume──▶  Courtly.Worker
+       ▲                            │                                                   │
+       └──────── SignalR ───────────┘                                          e-mail (SMTP)
+                                     │
+                        PostgreSQL (database 200067) · Stripe (sandbox)
 ```
 
-## Prerequisites
+- **Courtly.Api** — the main REST service; also hosts the SignalR hub.
+- **Courtly.Worker** — a separate service/container that consumes RabbitMQ messages to send emails and create/push notifications.
+- **PostgreSQL** — the relational database (named `200067`).
+- **RabbitMQ** — the message broker between the two services.
 
-> **Just testing the app?** You only need **Docker Desktop** (plus an **Android emulator** for the mobile app).
-> No Flutter, Visual Studio, or .NET SDK required — jump to **[Testing on Windows](#testing-on-windows-no-build-tools)**.
-> The list below is for **building / developing** from source.
+## Tech stack
 
-- .NET 10 SDK (LTS)
-- Flutter (stable, **3.35+**) with the **desktop toolchain for your OS** — **Windows** (Visual Studio 2022 with the "Desktop development with C++" workload, **including the C++ ATL component**) or **macOS** (Xcode) — plus the **Android** toolchain for the mobile client (and optionally iOS on macOS)
-- Docker + Docker Compose (Docker Desktop on Windows/macOS)
+| Layer | Technology |
+|---|---|
+| API & Worker | .NET 10, ASP.NET Core, EF Core |
+| Database | PostgreSQL 16 |
+| Messaging | RabbitMQ 3.13 |
+| Real-time | SignalR |
+| Payments | Stripe (sandbox) |
+| PDF reports | QuestPDF |
+| Front-end | Flutter — Windows desktop + Android mobile |
+| Infrastructure | Docker Compose |
 
-## Testing on Windows (no build tools)
+---
 
-Fastest way to try the app — **no Flutter, no Visual Studio, no .NET SDK**, just **Docker Desktop**
-(and an **Android emulator** for the mobile app). Everything runs from the GitHub Release + Docker.
-All commands are **PowerShell**. Don't `flutter run` / rebuild to test — the prebuilt binaries avoid the
-whole Windows toolchain (Flutter version, C++ build tools, ATL, …).
+## Getting started
 
-**1. Config** — get the ready-to-run `.env` from the `.env-tajne.zip` you received:
-```powershell
-tar -xf .env-tajne.zip            # password: fit  → creates .env at the repo root
+There are two ways to run Courtly:
+
+- **Option A — Run the prebuilt release** (recommended for reviewers). Needs only **Docker Desktop**, plus an **Android emulator** for the mobile app. No Flutter, Visual Studio, or .NET SDK required.
+- **Option B — Run from source** (for developers who want to build or modify the code).
+
+Either way, start with **Configuration** and **Start the backend** below.
+
+### Prerequisites
+
+**To test the prebuilt apps:**
+- Docker Desktop
+- An Android emulator (via Android Studio) — only needed for the mobile app
+
+**To build from source (developers):**
+- .NET 10 SDK
+- Flutter (stable, **3.35 or newer**) with the desktop toolchain for your OS:
+  - **Windows** — Visual Studio 2022 with the *Desktop development with C++* workload, including the **C++ ATL** component
+  - **macOS** — Xcode
+  - plus the Android toolchain for the mobile client
+- Docker Desktop
+
+### 1. Configuration (`.env`)
+
+All configuration and secrets live in a single `.env` file at the repository root.
+
+- **Reviewers** — the working configuration is provided as a password-protected archive, `.env-tajne.zip` (submitted via the DL system; password **`fit`**). Extract it into the repository root:
+  ```bash
+  unzip -P fit .env-tajne.zip     # macOS / Linux
+  tar  -xf   .env-tajne.zip       # Windows PowerShell
+  ```
+  This produces a ready-to-run `.env` — nothing to fill in.
+- **Developers** — copy the template and provide your own keys:
+  ```bash
+  cp .env.example .env
+  ```
+
+### 2. Start the backend (Docker)
+
+From the repository root:
+```bash
+docker compose up --build
 ```
+This builds and runs all four services — PostgreSQL, RabbitMQ, the API, and the worker — and seeds sample data automatically on first run.
 
-**2. Backend** — Docker builds and runs it (no .NET SDK needed):
-```powershell
-docker compose up --build         # API on http://localhost:5000
-curl http://localhost:5000/health # must respond before opening the apps
-```
+- API: `http://localhost:5000` (health check: `http://localhost:5000/health`)
+- RabbitMQ management UI: `http://localhost:15672`
+- `docker compose ps` should report all services as healthy.
 
-**3. Desktop admin** — download `fit-build-<date>.zip` from the Release, then run the prebuilt `.exe`:
+> **macOS, port 5000:** if the API fails to bind port 5000, turn off *AirPlay Receiver* (System Settings → General → AirDrop & Handoff), which reserves that port on macOS.
+
+### Option A — Run the prebuilt release (recommended for reviewers)
+
+Download **`fit-build-<date>.zip`** from the project's **GitHub Release** and extract it; it contains the Windows desktop executable and the Android APK. **Ensure the backend is running first** (step 2 — `http://localhost:5000/health` should respond).
+
+**Windows desktop admin** — run the executable (no Flutter or Visual Studio needed):
 ```powershell
 Expand-Archive .\fit-build-<date>.zip .\courtly-build -Force
 .\courtly-build\desktop\build\windows\x64\runner\Release\courtly.exe
 ```
-Sign in `desktop` / `test`.
+Sign in with an Admin or Staff account (see [Test credentials](#test-credentials)).
 
-**4. Mobile client** — Android emulator + the prebuilt APK:
+**Android mobile client** — install the APK on a running **Google Android emulator**:
 ```powershell
-winget install --id Google.AndroidStudio    # once; then open it → Device Manager → create & start an emulator
-# with the emulator booted (Android home screen visible):
-& "$env:LOCALAPPDATA\Android\Sdk\platform-tools\adb.exe" devices    # expect: emulator-5554   device
+# 1. Start an emulator: Android Studio → Device Manager → create & launch a device.
+# 2. Install the APK (adb ships with the Android SDK):
+& "$env:LOCALAPPDATA\Android\Sdk\platform-tools\adb.exe" devices     # expect: emulator-5554   device
 & "$env:LOCALAPPDATA\Android\Sdk\platform-tools\adb.exe" install ".\courtly-build\mobile\build\app\outputs\flutter-apk\app-release.apk"
 ```
-Open **Courtly** in the emulator, sign in `mobile` / `test`.
+Open **Courtly** in the emulator and sign in with a client account.
 
-**Gotchas**
-- **Order matters:** backend up (`/health` responds) → *then* open the apps.
-- **`adb` "not recognized":** it isn't on PATH — call it by full path as shown (`…\Android\Sdk\platform-tools\adb.exe`).
-- **Use a Google emulator** (it maps `10.0.2.2` → your PC's `localhost`, where the API runs). Physical phones / BlueStacks won't reach the backend without rebuilding the APK.
-- **"Change photo" shows nothing:** a fresh emulator has an empty gallery — drag any image onto the emulator window first, then pick it.
-- **Stripe test card:** `4242 4242 4242 4242`, any future expiry, any CVC/ZIP.
+> The APK targets `http://10.0.2.2:5000` — the Google emulator's alias for the host machine's `localhost`. Use a **Google Android emulator** (not a third-party emulator or a physical device) so it can reach the backend without rebuilding.
 
-## Running
+### Option B — Run from source (developers)
 
-> **Configuration (`.env`).** All secrets/config live in a single `.env` at the repo root (DB name is `200067`).
-> - **Reviewers / graders:** the working config ships as a password-protected archive. Unzip it into the repo root —
->   `unzip -P fit .env-tajne.zip` (password: **`fit`**) — which creates a ready-to-run `.env`. Nothing to fill in.
->   (On Windows: right-click the zip → Extract, enter `fit`, or `tar -xf .env-tajne.zip` in PowerShell.)
-> - **Developers:** `cp .env.example .env` and fill in the keys (Postgres, JWT, Stripe **test** keys, SMTP, RabbitMQ, …).
-> - Use a dedicated RabbitMQ user (not `guest` — it is loopback-only and is refused across the Docker network).
-
-**Full stack (Docker)**
-```bash
-docker compose up --build      # postgres + rabbitmq + api + worker, all healthchecked
-```
-- API: http://localhost:5000 — health probe at http://localhost:5000/health
-- RabbitMQ management UI: http://localhost:15672 (log in with `RABBITMQ_USER`/`RABBITMQ_PASSWORD`)
-- `docker compose ps` should show all four services `healthy`.
-
-> **macOS note — port 5000.** macOS "AirPlay Receiver" listens on port 5000, which the API publishes.
-> If `docker compose up` fails with `bind: address already in use` on port 5000, turn it off:
-> **System Settings → General → AirDrop & Handoff → AirPlay Receiver → Off** (reversible), or remap the
-> API's published port in `docker-compose.yml`.
-
-**Backend (run directly, without Docker)**
-```bash
-cd backend && dotnet build
-# Set the DB host / RABBITMQ_HOST to localhost in .env when running this way.
-dotnet run --project src/Courtly.Api      # API on http://localhost:5000
-dotnet run --project src/Courtly.Worker   # connects to RabbitMQ
-```
-
-**Frontend** — one Flutter project, two entrypoints. Start with:
+Front-end:
 ```bash
 cd frontend
 flutter pub get
-flutter test                                     # widget tests
 ```
-
-*Desktop admin* (`lib/main_admin.dart`) — themed top-nav (Dashboard · Reservations · Courts · Users · Reports); sign in with an Admin/Staff account. Needs the API running. Use `localhost` as the API host on both OSes.
+**Desktop admin** (API host is `localhost` on both platforms):
 ```bash
-# Windows
-flutter run -d windows -t lib/main_admin.dart --dart-define=API_BASE_URL=http://localhost:5000
-# macOS
-flutter run -d macos   -t lib/main_admin.dart --dart-define=API_BASE_URL=http://localhost:5000
+flutter run -d windows -t lib/main_admin.dart --dart-define=API_BASE_URL=http://localhost:5000   # Windows
+flutter run -d macos   -t lib/main_admin.dart --dart-define=API_BASE_URL=http://localhost:5000   # macOS
 ```
-
-*Mobile client* (`lib/main_client.dart`) — bottom nav (Home / Search / Bookings / Notifications / Profile): browse/search courts, book + pay in-app (Stripe), bookings history, reviews, recommendations, live notifications, profile. Sign in with a mobile/User account.
+**Mobile client:**
 ```bash
-flutter run -d emulator-5554   -t lib/main_client.dart --dart-define=API_BASE_URL=http://10.0.2.2:5000   # Android emulator (10.0.2.2 = host)
+flutter run -d emulator-5554   -t lib/main_client.dart --dart-define=API_BASE_URL=http://10.0.2.2:5000   # Android emulator
 flutter run -d "iPhone 17 Pro" -t lib/main_client.dart --dart-define=API_BASE_URL=http://localhost:5000  # iOS Simulator (macOS)
 ```
 
-> `API_BASE_URL` is read once via `String.fromEnvironment('API_BASE_URL')`; if omitted it defaults to
-> `http://localhost:5000` (admin) / `http://10.0.2.2:5000` (mobile emulator).
+Optionally, run the backend without Docker (set the database and RabbitMQ hosts to `localhost` in `.env`):
+```bash
+cd backend
+dotnet run --project src/Courtly.Api      # API on http://localhost:5000
+dotnet run --project src/Courtly.Worker   # background worker
+```
 
-> **iOS Simulator (mobile client).** One-time: `xcodebuild -downloadPlatform iOS` to install the runtime, then
-> `open -a Simulator` to boot an iPhone before `flutter run`. The simulator reaches the host as `localhost`
-> (use `http://localhost:5000`, not `10.0.2.2`). The macOS admin app is sandboxed, so its network + keychain
-> entitlements are committed; no extra setup needed.
+> The API base URL is read once via `String.fromEnvironment('API_BASE_URL')`.
+
+---
 
 ## Test credentials
 
-Seeded on startup (feature 4). Every account uses the password **`test`**. See
-[`docs/seed-data.md`](docs/seed-data.md) for the full list of seeded data.
+All seeded accounts use the password **`test`**.
 
-| App | Username | Password | Role |
-|---|---|---|---|
-| Admin (desktop) | `desktop` | `test` | Admin |
-| Staff (desktop) | `staff` | `test` | Staff |
-| Client (mobile) | `mobile` | `test` | User |
-| Client (mobile) | `emma` | `test` | User |
+| Application | Username | Role |
+|---|---|---|
+| Desktop admin | `desktop` | Admin |
+| Desktop admin | `staff` | Staff |
+| Mobile client | `mobile` | User |
+| Mobile client | `emma` | User |
 
-Note: 
-> In order to receive emails you would need to update the mobile user or ema user, and input the real emal address. Alternatively, you could create a new account with the correct email address. I was testing with my real email address. 
+- **Stripe test card** (mobile payment): `4242 4242 4242 4242`, any future expiry date, any CVC and postal code.
+- **Email:** by default, outgoing mail is captured locally (Mailpit) and not delivered to real inboxes. To receive real email, configure SMTP in `.env` and set a real address on a client account.
+- **Reset the data:** `docker compose down -v && docker compose up --build` recreates and re-seeds the database.
 
-> Seed data is created automatically: `docker compose up` applies migrations (which insert reference data +
-> roles) and then runs an idempotent runtime seeder (users, courts with images, time slots, sample
-> reservations/payments/reviews/news). Re-running never duplicates rows. To reset from scratch:
-> `docker compose down -v && docker compose up --build`.
+---
 
-## Release build & submission
+## Troubleshooting
 
-Binaries are **not** committed — they are produced by CI and attached to a GitHub Release.
+| Symptom | Resolution |
+|---|---|
+| App can't sign in / shows no data | Start the backend first — `http://localhost:5000/health` must respond before opening the apps. |
+| `adb` "not recognized" (Windows) | Call it by full path: `& "$env:LOCALAPPDATA\Android\Sdk\platform-tools\adb.exe" …`, or add `platform-tools` to PATH. |
+| Mobile app can't reach the backend | Use a **Google** Android emulator (it maps `10.0.2.2` to the host's `localhost`). |
+| "Change photo" shows no images | A fresh emulator has an empty gallery — drag an image onto the emulator window first, then pick it. |
+| Building from source fails on `initialValue` | Flutter is older than 3.35 — run `flutter upgrade`. |
+| Windows build: `atlstr.h` not found | Add the **C++ ATL** component to Visual Studio 2022 (Installer → Modify → Individual components). |
+| macOS: port 5000 already in use | Disable AirPlay Receiver (see step 2). |
 
-**CI (`.github/workflows/release.yml`).** Pushing a `predaja-YYYY-MM-DD` tag (or running the
-workflow manually from the Actions tab) builds both binaries and drafts a release:
+---
 
-- **client APK** (Android) — `lib/main_client.dart`, `API_BASE_URL=http://10.0.2.2:5000`
-- **admin `.exe`** (Windows) — `lib/main_admin.dart`, `API_BASE_URL=http://localhost:5000`
+## Building & release
 
-They are packed into `fit-build-<date>.zip` with the required layout:
+Binaries are **not** committed to the repository; they are produced by CI and attached to a GitHub Release.
 
+**CI (`.github/workflows/release.yml`).** Pushing a `predaja-YYYY-MM-DD` tag (or running the workflow manually) builds both binaries and drafts a release:
+
+- Android client APK — built from `lib/main_client.dart` with `API_BASE_URL=http://10.0.2.2:5000`
+- Windows admin `.exe` — built from `lib/main_admin.dart` with `API_BASE_URL=http://localhost:5000`
+
+packaged as `fit-build-<date>.zip`:
 ```
 fit-build-<date>.zip
 ├── mobile/build/app/outputs/flutter-apk/app-release.apk
-└── desktop/build/windows/x64/runner/Release/…        (Courtly admin .exe + data)
+└── desktop/build/windows/x64/runner/Release/…
 ```
 
-**Build locally** (optional — the same outputs CI produces; run on the matching OS):
+**Build locally** (optional; run on the matching OS):
 ```bash
 cd frontend && flutter clean
-# Windows desktop admin .exe  →  build/windows/x64/runner/Release/
 flutter build windows --release -t lib/main_admin.dart  --dart-define=API_BASE_URL=http://localhost:5000
-# Android client APK          →  build/app/outputs/flutter-apk/app-release.apk
 flutter build apk     --release -t lib/main_client.dart --dart-define=API_BASE_URL=http://10.0.2.2:5000
 ```
-> The Windows `.exe` can only be built on Windows (or the `windows-latest` CI job); the APK builds on any OS.
 
-**Publishing (immutable).** In **Settings → Releases**, enable **release immutability** first
-(applies to future releases only). The workflow creates the release as a **draft** — verify the
-ZIP contents, then **Publish**. Submit the tag-specific release link
-(`…/releases/tag/predaja-YYYY-MM-DD`), never `releases/latest`.
+**Publish.** Enable release immutability (Settings → Releases) before publishing the draft, then submit the tag-specific release link (`…/releases/tag/predaja-YYYY-MM-DD`).
 
-**Secrets.** The `.env` is git-ignored and lives only on your machine. For grading, package the
-working config as a password-protected archive:
+**Secrets.** The `.env` is never committed. It is packaged as `.env-tajne.zip` (`zip -P fit .env-tajne.zip .env`) and provided **only through the private DL system** — never committed to this public repository nor attached to a release.
+
+---
+
+## Automated tests (developers)
 
 ```bash
-zip -P fit .env-tajne.zip .env      # password: fit
+cd backend  && dotnet test        # backend unit tests
+cd frontend && flutter test       # widget tests
+cd frontend && flutter analyze    # static analysis
 ```
 
-Submit `.env-tajne.zip` **only through the private DL system** (with the password `fit`). It is
-git-ignored, and it must **never** be committed to this public repo or attached to a GitHub Release —
-with a known password, a public archive exposes every secret. Never put a plain `.env` anywhere public
-either.
+---
 
-**Clean-environment run** (what a grader does): fresh clone → `unzip -P fit .env-tajne.zip` →
-`docker compose up --build` → all four services healthy, log in with the credentials above —
-with **no** code, port, or connection-string edits.
+## Project structure
+
+```
+backend/                       .NET 10 solution — Domain, Contracts, Infrastructure, Application, Api, Worker, Tests
+frontend/                      Flutter project — main_admin.dart (desktop) + main_client.dart (mobile)
+docker-compose.yml             PostgreSQL, RabbitMQ, API, and worker services
+.env.example                   documented configuration keys
+recommender-dokumentacija.md   recommender algorithm documentation
+.github/workflows/             CI release pipeline
+```
