@@ -81,6 +81,9 @@ Seeded on startup (feature 4). Every account uses the password **`test`**. See
 | Client (mobile) | `mobile` | `test` | User |
 | Client (mobile) | `emma` | `test` | User |
 
+Note: 
+> In order to receive emails you would need to update the mobile user or ema user, and input the real emal address. Alternatively, you could create a new account with the correct email address. I was testing with my real email address. 
+
 > Seed data is created automatically: `docker compose up` applies migrations (which insert reference data +
 > roles) and then runs an idempotent runtime seeder (users, courts with images, time slots, sample
 > reservations/payments/reviews/news). Re-running never duplicates rows. To reset from scratch:
