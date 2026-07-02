@@ -88,6 +88,7 @@ public sealed class EmailConsumerBackgroundService : BackgroundService
             {
                 case ReservationRoutingKeys.Confirmed:
                 case ReservationRoutingKeys.Cancelled:
+                case ReservationRoutingKeys.Rescheduled:
                     reservationEvent = JsonSerializer.Deserialize<ReservationEvent>(
                         ea.Body.Span, MessagingTopology.SerializerOptions);
                     break;
@@ -171,6 +172,11 @@ public sealed class EmailConsumerBackgroundService : BackgroundService
                 break;
             case ReservationRoutingKeys.Cancelled:
                 await emailSender.SendBookingCancelledAsync(
+                    recipient.Email, recipient.Name, courtName,
+                    evt.SlotStartUtc, evt.SlotEndUtc, evt.Reason, ct);
+                break;
+            case ReservationRoutingKeys.Rescheduled:
+                await emailSender.SendBookingRescheduledAsync(
                     recipient.Email, recipient.Name, courtName,
                     evt.SlotStartUtc, evt.SlotEndUtc, evt.Reason, ct);
                 break;

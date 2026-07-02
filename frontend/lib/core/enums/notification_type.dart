@@ -1,6 +1,8 @@
 import '../theme/app_colors.dart';
 
-/// Mirrors the backend `NotificationType` enum (int values 0..6).
+/// Mirrors the backend `NotificationType` enum (int values 0..7). Declaration
+/// order must match the backend int values so `fromWire(index)` resolves
+/// correctly — `reservationRescheduled` is 7, appended after `general` (6).
 enum NotificationType {
   reservationCreated,
   reservationConfirmed,
@@ -8,7 +10,8 @@ enum NotificationType {
   reservationCompleted,
   paymentSucceeded,
   paymentRefunded,
-  general;
+  general,
+  reservationRescheduled;
 
   int get wireValue => index;
 
@@ -19,6 +22,7 @@ enum NotificationType {
         NotificationType.reservationCreated => 'Reservation created',
         NotificationType.reservationConfirmed => 'Reservation confirmed',
         NotificationType.reservationCancelled => 'Reservation cancelled',
+        NotificationType.reservationRescheduled => 'Reservation rescheduled',
         NotificationType.reservationCompleted => 'Reservation completed',
         NotificationType.paymentSucceeded => 'Payment received',
         NotificationType.paymentRefunded => 'Payment refunded',

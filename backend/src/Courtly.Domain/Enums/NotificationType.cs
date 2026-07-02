@@ -10,4 +10,5 @@ public enum NotificationType
     PaymentSucceeded = 4,
     PaymentRefunded = 5,
     General = 6,
+    ReservationRescheduled = 7,
 }

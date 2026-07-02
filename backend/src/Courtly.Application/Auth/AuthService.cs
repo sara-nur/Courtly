@@ -7,6 +7,7 @@ using Courtly.Domain.Entities;
 using Courtly.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.Logging;
 
 namespace Courtly.Application.Auth;
@@ -59,6 +60,13 @@ public sealed class AuthService : IAuthService
             CreatedAtUtc = _clock.UtcNow,
         };
 
+        // Atomic across every write below (user row, role assignment, refresh token): if any step throws the
+        // whole registration rolls back. InMemory has no transactions, so guard on the relational provider —
+        // await-using a null transaction is a no-op, so the InMemory path behaves exactly as before.
+        await using var tx = _db.Database.IsRelational()
+            ? await _db.Database.BeginTransactionAsync(ct)
+            : null;
+
         var created = await _userManager.CreateAsync(user, request.Password);
         if (!created.Succeeded)
         {
@@ -66,10 +74,21 @@ public sealed class AuthService : IAuthService
         }
 
         // Register hardening: role is never taken from the request — every self-registration is a User.
-        await _userManager.AddToRoleAsync(user, Roles.User);
+        var addedToRole = await _userManager.AddToRoleAsync(user, Roles.User);
+        if (!addedToRole.Succeeded)
+        {
+            throw new ValidationException(DescribeErrors(addedToRole), ToFieldErrors(addedToRole, nameof(request.Email)));
+        }
+
         _logger.LogInformation("Registered new user {UserId} ({Email}).", user.Id, user.Email);
 
-        return await IssueTokensAsync(user, ct);
+        var response = await IssueTokensAsync(user, ct);
+        if (tx is not null)
+        {
+            await tx.CommitAsync(ct);
+        }
+
+        return response;
     }
 
     public async Task<AuthResponse> LoginAsync(LoginRequest request, CancellationToken ct = default)
@@ -210,10 +229,21 @@ public sealed class AuthService : IAuthService
             }
         }
 
+        // Atomic across both writes below: UpdateSecurityStampAsync persists the new hash + stamp, then the
+        // explicit SaveChanges marks the token used. If the second save fails the first must roll back, or the
+        // password would change while the token stays reusable. InMemory has no transactions — see RegisterAsync.
+        await using var tx = _db.Database.IsRelational()
+            ? await _db.Database.BeginTransactionAsync(ct)
+            : null;
+
         user.PasswordHash = _userManager.PasswordHasher.HashPassword(user, request.NewPassword);
         stored.UsedAtUtc = now;
         await _userManager.UpdateSecurityStampAsync(user);
         await _db.SaveChangesAsync(ct);
+        if (tx is not null)
+        {
+            await tx.CommitAsync(ct);
+        }
 
         _logger.LogInformation("Password reset completed for user {UserId}.", user.Id);
     }
@@ -244,6 +274,13 @@ public sealed class AuthService : IAuthService
                 new Dictionary<string, string[]> { ["cityId"] = new[] { "The selected city does not exist." } });
         }
 
+        // Atomic across both writes below: SetEmailAsync and UpdateAsync each save, and a failure in the second
+        // must not leave a half-applied profile (email changed but names not, or vice versa). InMemory has no
+        // transactions — see RegisterAsync.
+        await using var tx = _db.Database.IsRelational()
+            ? await _db.Database.BeginTransactionAsync(ct)
+            : null;
+
         user.FirstName = request.FirstName;
         user.LastName = request.LastName;
         user.CityId = request.CityId;
@@ -264,6 +301,11 @@ public sealed class AuthService : IAuthService
         if (!updated.Succeeded)
         {
             throw new ValidationException(DescribeErrors(updated), ToFieldErrors(updated, "email"));
+        }
+
+        if (tx is not null)
+        {
+            await tx.CommitAsync(ct);
         }
 
         var roles = await _userManager.GetRolesAsync(user);

@@ -7,8 +7,8 @@ namespace Courtly.Application.Recommendations;
 ///
 /// The final score blends a content-based component (0.75) with a popularity component (0.25); within the content
 /// component surface (0.35) and time-bucket (0.25) dominate — the two visible drivers in the mockup ("Because you
-/// like Clay", "Morning availability"). Feedback is applied on top: a "No" is a large negative that guarantees the
-/// court is excluded, a "Yes" is a small positive nudge.
+/// like Clay", "Morning availability"). Feedback is applied on top: a "No" is a large negative that demotes the
+/// court below every non-disliked one (it is never removed — the list can't empty out), a "Yes" is a small positive nudge.
 /// </summary>
 public static class RecommendationWeights
 {
@@ -28,7 +28,7 @@ public static class RecommendationWeights
     public const double PopRating = 0.40;
 
     // Feedback adjustment. A negative dominates any content+popularity score (both in [0,1]) so the court is
-    // demoted below every positively-scored court; disliked courts are additionally hard-filtered out.
+    // demoted below every non-disliked court; feedback never excludes, so the list can't empty out.
     public const double FeedbackNegative = -1.0;
     public const double FeedbackPositive = 0.05;
 

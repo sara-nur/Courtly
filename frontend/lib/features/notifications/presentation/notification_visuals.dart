@@ -10,6 +10,7 @@ IconData iconForNotificationType(NotificationType type) => switch (type) {
       NotificationType.reservationCreated => Icons.event_available,
       NotificationType.reservationConfirmed => Icons.check_circle_outline,
       NotificationType.reservationCancelled => Icons.event_busy,
+      NotificationType.reservationRescheduled => Icons.event_repeat,
       NotificationType.reservationCompleted => Icons.task_alt,
       NotificationType.paymentSucceeded => Icons.payments_outlined,
       NotificationType.paymentRefunded => Icons.undo,

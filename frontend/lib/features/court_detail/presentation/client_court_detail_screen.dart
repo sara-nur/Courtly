@@ -24,10 +24,10 @@ import 'widgets/write_review_sheet.dart';
 /// "Total price + Book Now" bar. Reached by tapping a court card on Home/Search.
 ///
 /// All data loads together via [courtDetailProvider]; the loading/error states
-/// keep their own app bar so the back button is always available. Book Now is
-/// intentionally disabled until the booking flow (F25) exists, and the
-/// "Write a review" entry appears only when the user has a completed,
-/// not-yet-reviewed booking for this court.
+/// keep their own app bar so the back button is always available. Book Now opens
+/// the booking flow (F25) and is disabled only while the court is under
+/// maintenance; the "Write a review" entry appears only when the user has a
+/// completed, not-yet-reviewed booking for this court.
 class ClientCourtDetailScreen extends ConsumerWidget {
   const ClientCourtDetailScreen({super.key, required this.courtId});
 

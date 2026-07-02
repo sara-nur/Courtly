@@ -14,8 +14,8 @@ namespace Courtly.Application.Recommendations;
 /// user's non-cancelled reservations (surface / court type / time-bucket / price / indoor) and their F23 search
 /// history — into a normalized preference profile, scores every bookable court against it (blended 0.75 content /
 /// 0.25 popularity, with a popularity-only path on cold-start), and reports the single strongest dimension per court
-/// as an explainable reason. Yes/No feedback is upserted per (user, court) and fed back in: a "No" hard-excludes the
-/// court next fetch, a "Yes" nudges it up. All the tunables live in <see cref="RecommendationWeights"/> so the code
+/// as an explainable reason. Yes/No feedback is upserted per (user, court) and fed back in: a "No" demotes the court
+/// (a large negative) on the next fetch without removing it, a "Yes" nudges it up. All the tunables live in <see cref="RecommendationWeights"/> so the code
 /// stays literal-free and matches <c>recommender-dokumentacija.md</c> exactly.
 ///
 /// Everything is computed fresh per request (a handful of bounded, <c>AsNoTracking</c> queries) so new bookings and

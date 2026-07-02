@@ -52,6 +52,7 @@ public static class MessagingTopology
     {
         ReservationRoutingKeys.Confirmed,
         ReservationRoutingKeys.Cancelled,
+        ReservationRoutingKeys.Rescheduled,
         PaymentRoutingKeys.Refunded,
     };
 
@@ -66,6 +67,7 @@ public static class MessagingTopology
         ReservationRoutingKeys.Created,
         ReservationRoutingKeys.Confirmed,
         ReservationRoutingKeys.Cancelled,
+        ReservationRoutingKeys.Rescheduled,
         ReservationRoutingKeys.Completed,
         PaymentRoutingKeys.Succeeded,
         PaymentRoutingKeys.Refunded,

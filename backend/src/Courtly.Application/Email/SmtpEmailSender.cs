@@ -94,6 +94,31 @@ public sealed class SmtpEmailSender : IEmailSender
         return SendAsync(toEmail, "Your Courtly booking was cancelled", text, ct, html);
     }
 
+    public Task SendBookingRescheduledAsync(string toEmail, string userName, string courtName, DateTime startUtc, DateTime endUtc, string? reason, CancellationToken ct = default)
+    {
+        var when = FormatWindow(startUtc, endUtc);
+        var hasReason = !string.IsNullOrWhiteSpace(reason);
+        var text =
+            $"Hi {userName},\n\n" +
+            "Your booking has been rescheduled.\n\n" +
+            $"Court: {courtName}\n" +
+            $"New time: {when}\n" +
+            (hasReason ? $"Details: {reason}\n" : string.Empty) +
+            "\nIf this wasn't expected, please get in touch.";
+
+        var details = hasReason
+            ? DetailRows(("Court", courtName), ("New time", when), ("Details", reason!))
+            : DetailRows(("Court", courtName), ("New time", when));
+
+        var html = WrapHtml(
+            "<p style=\"font-size:18px;font-weight:600;margin:0 0 12px;\">Your booking was rescheduled</p>" +
+            $"<p style=\"font-size:14px;line-height:1.6;margin:0 0 20px;color:#444;\">Hi {Enc(userName)}, your booking has been moved to a new time:</p>" +
+            details +
+            "<p style=\"font-size:14px;line-height:1.6;margin:0;color:#444;\">If this wasn't expected, just reply to this email and we'll help.</p>");
+
+        return SendAsync(toEmail, "Your Courtly booking was rescheduled", text, ct, html);
+    }
+
     public Task SendPaymentRefundedAsync(string toEmail, string userName, string courtName, decimal amount, CancellationToken ct = default)
     {
         var text =

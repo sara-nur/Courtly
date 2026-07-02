@@ -158,9 +158,28 @@ public class NotificationFactoryTests
     }
 
     [Fact]
+    public void Build_ReservationRescheduled_MapsTypeTitleAndMentionsNewSlotAndReason()
+    {
+        // The publisher puts the NEW slot in SlotStartUtc and a human "Rescheduled from {old} to {new}"
+        // string in Reason; the body must surface the new slot and append that reason when present.
+        const string reason = "Rescheduled from 2026-06-30 08:00 UTC to 2026-07-01 14:30 UTC";
+        var (type, title, text) = NotificationFactory.Build(
+            ReservationRoutingKeys.Rescheduled,
+            Reservation(ReservationRoutingKeys.Rescheduled, reason),
+            payment: null,
+            CourtName);
+
+        Assert.Equal(NotificationType.ReservationRescheduled, type);
+        Assert.Equal("Booking rescheduled", title);
+        Assert.Contains(CourtName, text);
+        Assert.Contains(ExpectedSlot, text);
+        Assert.Contains(reason, text);
+    }
+
+    [Fact]
     public void Build_UnknownRoutingKey_ThrowsArgumentOutOfRange()
     {
         Assert.Throws<ArgumentOutOfRangeException>(() =>
-            NotificationFactory.Build("reservation.rescheduled", reservation: null, payment: null, CourtName));
+            NotificationFactory.Build("reservation.bogus", reservation: null, payment: null, CourtName));
     }
 }

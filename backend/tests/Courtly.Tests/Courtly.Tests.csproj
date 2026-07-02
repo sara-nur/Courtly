@@ -19,6 +19,12 @@
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.2" />
     <!-- Feature 4: seeder idempotency test runs the runtime seeder against the in-memory provider. -->
     <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" Version="10.0.8" />
+    <!-- Auth atomicity: SQLite (kept-alive :memory:) is relational, so it exercises the real transaction path. -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.8" />
+    <!-- Override the native SQLite binary the Sqlite provider pulls transitively (2.1.11 → GHSA-2m69-gcr7-jv3q,
+         high severity). 3.50.3 is the patched build; only the native lib is bumped (SQLite's C ABI is stable, so the
+         2.1.x managed layer is unaffected). Test-only dependency. -->
+    <PackageReference Include="SQLitePCLRaw.lib.e_sqlite3" Version="3.50.3" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.8" />
     <!-- Feature 5: auth tests build a UserManager via IdentityCore and validate minted JWTs. -->
     <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="10.0.8" />

@@ -17,13 +17,17 @@ docker-compose.yml   # (added in feature 2) postgres, rabbitmq, api, worker
 ## Prerequisites
 
 - .NET 10 SDK (LTS)
-- Flutter (stable) with macOS desktop + Android (and optionally iOS/Xcode) toolchains enabled
-- Docker + Docker Compose (from feature 2 on)
+- Flutter (stable) with the **desktop toolchain for your OS** — **Windows** (Visual Studio 2022 with the "Desktop development with C++" workload) or **macOS** (Xcode) — plus the **Android** toolchain for the mobile client (and optionally iOS on macOS)
+- Docker + Docker Compose (Docker Desktop on Windows/macOS)
 
 ## Running
 
-> Config lives in `.env` (copy from `.env.example` and fill in). DB name is `200067`.
-> Use a dedicated RabbitMQ user (not `guest` — it is loopback-only and is refused across the Docker network).
+> **Configuration (`.env`).** All secrets/config live in a single `.env` at the repo root (DB name is `200067`).
+> - **Reviewers / graders:** the working config ships as a password-protected archive. Unzip it into the repo root —
+>   `unzip -P fit .env-tajne.zip` (password: **`fit`**) — which creates a ready-to-run `.env`. Nothing to fill in.
+>   (On Windows: right-click the zip → Extract, enter `fit`, or `tar -xf .env-tajne.zip` in PowerShell.)
+> - **Developers:** `cp .env.example .env` and fill in the keys (Postgres, JWT, Stripe **test** keys, SMTP, RabbitMQ, …).
+> - Use a dedicated RabbitMQ user (not `guest` — it is loopback-only and is refused across the Docker network).
 
 **Full stack (Docker)**
 ```bash
@@ -46,19 +50,25 @@ dotnet run --project src/Courtly.Api      # API on http://localhost:5000
 dotnet run --project src/Courtly.Worker   # connects to RabbitMQ
 ```
 
-**Frontend**
+**Frontend** — one Flutter project, two entrypoints. Start with:
 ```bash
 cd frontend
 flutter pub get
 flutter test                                     # widget tests
-# desktop admin — sign in (Admin/Staff only) → themed shell with top-nav
-# (Dashboard · Reservations · Courts · Users · Reports). Needs the API running.
-flutter run -d macos -t lib/main_admin.dart --dart-define=API_BASE_URL=http://localhost:5000
-# mobile client — bottom nav (Home / Search / Bookings / Notifications / Profile):
-# browse/search courts, book + pay in-app (Stripe), bookings history, reviews,
-# recommendations, live notifications, profile. Sign in with a mobile/User account.
-flutter run -d emulator-5554 -t lib/main_client.dart --dart-define=API_BASE_URL=http://10.0.2.2:5000   # Android emulator
-flutter run -d "iPhone 17 Pro"  -t lib/main_client.dart --dart-define=API_BASE_URL=http://localhost:5000  # iOS Simulator
+```
+
+*Desktop admin* (`lib/main_admin.dart`) — themed top-nav (Dashboard · Reservations · Courts · Users · Reports); sign in with an Admin/Staff account. Needs the API running. Use `localhost` as the API host on both OSes.
+```bash
+# Windows
+flutter run -d windows -t lib/main_admin.dart --dart-define=API_BASE_URL=http://localhost:5000
+# macOS
+flutter run -d macos   -t lib/main_admin.dart --dart-define=API_BASE_URL=http://localhost:5000
+```
+
+*Mobile client* (`lib/main_client.dart`) — bottom nav (Home / Search / Bookings / Notifications / Profile): browse/search courts, book + pay in-app (Stripe), bookings history, reviews, recommendations, live notifications, profile. Sign in with a mobile/User account.
+```bash
+flutter run -d emulator-5554   -t lib/main_client.dart --dart-define=API_BASE_URL=http://10.0.2.2:5000   # Android emulator (10.0.2.2 = host)
+flutter run -d "iPhone 17 Pro" -t lib/main_client.dart --dart-define=API_BASE_URL=http://localhost:5000  # iOS Simulator (macOS)
 ```
 
 > `API_BASE_URL` is read once via `String.fromEnvironment('API_BASE_URL')`; if omitted it defaults to
@@ -106,6 +116,16 @@ fit-build-<date>.zip
 ├── mobile/build/app/outputs/flutter-apk/app-release.apk
 └── desktop/build/windows/x64/runner/Release/…        (Courtly admin .exe + data)
 ```
+
+**Build locally** (optional — the same outputs CI produces; run on the matching OS):
+```bash
+cd frontend && flutter clean
+# Windows desktop admin .exe  →  build/windows/x64/runner/Release/
+flutter build windows --release -t lib/main_admin.dart  --dart-define=API_BASE_URL=http://localhost:5000
+# Android client APK          →  build/app/outputs/flutter-apk/app-release.apk
+flutter build apk     --release -t lib/main_client.dart --dart-define=API_BASE_URL=http://10.0.2.2:5000
+```
+> The Windows `.exe` can only be built on Windows (or the `windows-latest` CI job); the APK builds on any OS.
 
 **Publishing (immutable).** In **Settings → Releases**, enable **release immutability** first
 (applies to future releases only). The workflow creates the release as a **draft** — verify the

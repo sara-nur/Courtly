@@ -10,8 +10,7 @@ import '../../features/auth/domain/auth_models.dart';
 import 'courtly_logo.dart';
 
 /// Admin desktop shell: a persistent top navigation bar (logo, primary tabs,
-/// global search, notifications bell, profile menu) wrapping the routed body.
-/// Layout mirrors `ui_design_and_scope.pdf` p.5. The profile menu shows the
+/// profile menu) wrapping the routed body. The profile menu shows the
 /// signed-in user and signs out via the real auth API (Feature 8).
 class AdminShell extends ConsumerWidget {
   const AdminShell({super.key, required this.navigationShell});
@@ -115,15 +114,6 @@ class _TopNav extends StatelessWidget {
               onTap: () => onSelect(i),
             ),
           const Spacer(),
-          const _GlobalSearch(),
-          const SizedBox(width: AppSpacing.sm),
-          IconButton(
-            tooltip: 'Notifications',
-            onPressed: () {},
-            icon: const Icon(Icons.notifications_none),
-            color: AppColors.textSecondary,
-          ),
-          const SizedBox(width: AppSpacing.xs),
           _ProfileMenu(user: user, onSignOut: onSignOut),
         ],
       ),
@@ -164,29 +154,6 @@ class _NavTab extends StatelessWidget {
               fontWeight: FontWeight.w600,
               color: selected ? AppColors.primary : AppColors.textSecondary,
             ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _GlobalSearch extends StatelessWidget {
-  const _GlobalSearch();
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: 240,
-      child: TextField(
-        decoration: InputDecoration(
-          hintText: 'Search…',
-          prefixIcon: const Icon(Icons.search, size: 18),
-          isDense: true,
-          fillColor: AppColors.surfaceMuted,
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: AppSpacing.sm,
-            vertical: AppSpacing.xs,
           ),
         ),
       ),
