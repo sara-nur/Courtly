@@ -20,8 +20,9 @@ import '../../features/notifications/domain/notification_models.dart';
 import '../../features/notifications/presentation/notification_detail_screen.dart';
 import '../../features/notifications/presentation/notifications_screen.dart';
 import '../../features/payments/presentation/payment_screen.dart';
-import '../../features/placeholders/feature_placeholder.dart';
 import '../../features/profile/presentation/client_profile_screen.dart';
+import '../../features/reservations/presentation/client_booking_detail_screen.dart';
+import '../../features/reservations/presentation/client_bookings_screen.dart';
 import '../../features/recommendations/presentation/recommendations_screen.dart';
 import '../shell/client_shell.dart';
 
@@ -62,6 +63,12 @@ abstract final class ClientRoutes {
   /// Recommendations screen (F29), pushed above the shell from the Home tab. The
   /// screen fetches the current user's explainable recommendations fresh.
   static const String recommendations = '/recommendations';
+
+  /// Booking detail + receipt (F26A), pushed full-screen above the shell from the
+  /// Bookings tab list or the Home "Recent Bookings" strip. The reservation id
+  /// travels in the path so the screen loads fresh detail (status, IsPaid,
+  /// payment, cancellation).
+  static String bookingDetailPath(int reservationId) => '/booking/$reservationId';
 }
 
 /// Builds the client mobile router with an auth guard, mirroring the admin router
@@ -171,20 +178,22 @@ final clientRouterProvider = Provider<GoRouter>((ref) {
         path: ClientRoutes.recommendations,
         builder: (context, state) => const ClientRecommendationsScreen(),
       ),
+      // Booking detail + receipt (F26A), pushed full-screen above the shell (so it
+      // gets the standard back button) from the Bookings tab or the Home strip.
+      // The reservation id comes from the path so the screen loads fresh detail.
+      GoRoute(
+        path: '/booking/:id',
+        builder: (context, state) => ClientBookingDetailScreen(
+          reservationId: int.parse(state.pathParameters['id']!),
+        ),
+      ),
       StatefulShellRoute.indexedStack(
         builder: (context, state, navigationShell) =>
             ClientShell(navigationShell: navigationShell),
         branches: [
           _branch(ClientRoutes.home, const ClientHomeScreen()),
           _branch(ClientRoutes.search, const ClientSearchScreen()),
-          _branch(
-            ClientRoutes.bookings,
-            const FeaturePlaceholder(
-              title: 'My Bookings',
-              subtitle: 'Upcoming and past reservations.',
-              icon: Icons.calendar_today_outlined,
-            ),
-          ),
+          _branch(ClientRoutes.bookings, const ClientBookingsScreen()),
           _branch(
             ClientRoutes.notifications,
             const ClientNotificationsScreen(),
