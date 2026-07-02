@@ -1,4 +1,6 @@
 /// Barrel for the shared status enums (mirroring the backend Domain enums).
+library;
+
 export 'maintenance_status.dart';
 export 'notification_type.dart';
 export 'payment_status.dart';

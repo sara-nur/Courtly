@@ -1,4 +1,3 @@
-import 'package:courtly/app/router/client_router.dart';
 import 'package:courtly/core/app_flavor.dart';
 import 'package:courtly/core/enums/reservation_status.dart';
 import 'package:courtly/core/enums/time_of_day_bucket.dart';
@@ -186,13 +185,11 @@ class _FakePaymentRepository extends PaymentRepository {
 }
 
 /// Fake PaymentSheet gateway: runs [onPresent] (to simulate the server finalizing)
-/// and reports the given [outcome], without touching native Stripe.
+/// and reports a completed outcome, without touching native Stripe.
 class _FakePaymentSheetGateway implements PaymentSheetGateway {
-  _FakePaymentSheetGateway(this.onPresent,
-      {this.outcome = PaymentSheetOutcome.completed});
+  _FakePaymentSheetGateway(this.onPresent);
 
   final void Function() onPresent;
-  final PaymentSheetOutcome outcome;
   int presentCalls = 0;
 
   @override
@@ -203,6 +200,6 @@ class _FakePaymentSheetGateway implements PaymentSheetGateway {
   }) async {
     presentCalls++;
     onPresent();
-    return outcome;
+    return PaymentSheetOutcome.completed;
   }
 }

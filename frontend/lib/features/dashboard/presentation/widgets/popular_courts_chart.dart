@@ -41,7 +41,6 @@ class _PopularCourtRow extends ConsumerWidget {
 
   final PopularCourt court;
 
-  static const double _thumb = 40;
   static const double _barHeight = 8;
 
   @override

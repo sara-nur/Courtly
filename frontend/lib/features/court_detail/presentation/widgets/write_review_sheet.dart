@@ -89,6 +89,22 @@ class _WriteReviewSheetState extends ConsumerState<WriteReviewSheet> {
         title: 'Write a review',
         subtitle: widget.courtName,
         onClose: _submitting ? null : () => Navigator.of(context).pop(),
+        actions: [
+          TextButton(
+            onPressed: _submitting ? null : () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: _submitting ? null : _submit,
+            child: _submitting
+                ? const SizedBox(
+                    width: AppSpacing.md,
+                    height: AppSpacing.md,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Text('Submit review'),
+          ),
+        ],
         children: [
           Text('Your rating', style: theme.textTheme.titleSmall),
           const SizedBox(height: AppSpacing.xs),
@@ -118,22 +134,6 @@ class _WriteReviewSheetState extends ConsumerState<WriteReviewSheet> {
               style:
                   theme.textTheme.bodySmall?.copyWith(color: AppColors.danger),
             ),
-        ],
-        actions: [
-          TextButton(
-            onPressed: _submitting ? null : () => Navigator.of(context).pop(),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: _submitting ? null : _submit,
-            child: _submitting
-                ? const SizedBox(
-                    width: AppSpacing.md,
-                    height: AppSpacing.md,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Text('Submit review'),
-          ),
         ],
       ),
     );
