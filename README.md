@@ -136,7 +136,7 @@ ZIP contents, then **Publish**. Submit the tag-specific release link
 password-protected archive alongside it:
 
 ```bash
-zip -P fit .env-tajne.zip .env      # password: fit
+zip -P fit .env-tajne.zip .env     
 ```
 
 `.env-tajne.zip` is git-ignored too; `git add -f .env-tajne.zip` to include it in the repo, and
