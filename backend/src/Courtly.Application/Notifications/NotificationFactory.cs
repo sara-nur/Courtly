@@ -44,6 +44,11 @@ public static class NotificationFactory
                 "Booking cancelled",
                 CancelledText(reservation, court)),
 
+            ReservationRoutingKeys.Rescheduled => (
+                NotificationType.ReservationRescheduled,
+                "Booking rescheduled",
+                RescheduledText(reservation, court)),
+
             ReservationRoutingKeys.Completed => (
                 NotificationType.ReservationCompleted,
                 "Booking completed",
@@ -76,6 +81,14 @@ public static class NotificationFactory
         var text = $"Your booking for {court} at {SlotStart(reservation)} has been cancelled.";
         var reason = reservation?.Reason?.Trim();
         return string.IsNullOrEmpty(reason) ? text : $"{text} Reason: {reason}";
+    }
+
+    /// <summary>Reschedule body, using the new slot start and appending the reason ("Rescheduled from {old} to {new}") when present.</summary>
+    private static string RescheduledText(ReservationEvent? reservation, string court)
+    {
+        var text = $"Your booking for {court} has been rescheduled to {SlotStart(reservation)}.";
+        var reason = reservation?.Reason?.Trim();
+        return string.IsNullOrEmpty(reason) ? text : $"{text} {reason}";
     }
 
     /// <summary>The amount on a <c>payment.succeeded</c> event (the catalog amount).</summary>

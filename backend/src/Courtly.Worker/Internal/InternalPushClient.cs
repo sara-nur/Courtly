@@ -28,7 +28,7 @@ public sealed class InternalPushClient : IInternalPushClient
 
     public async Task PushAsync(InternalPushRequest request, CancellationToken ct = default)
     {
-        var response = await _http.PostAsJsonAsync(PushPath, request, ct);
+        using var response = await _http.PostAsJsonAsync(PushPath, request, ct);
         response.EnsureSuccessStatusCode();
     }
 }

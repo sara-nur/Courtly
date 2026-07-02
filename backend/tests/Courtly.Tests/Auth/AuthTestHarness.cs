@@ -41,6 +41,9 @@ internal sealed class RecordingEmailSender : IEmailSender
     public Task SendBookingCancelledAsync(string toEmail, string userName, string courtName, DateTime startUtc, DateTime endUtc, string? reason, CancellationToken ct = default) =>
         Task.CompletedTask;
 
+    public Task SendBookingRescheduledAsync(string toEmail, string userName, string courtName, DateTime startUtc, DateTime endUtc, string? reason, CancellationToken ct = default) =>
+        Task.CompletedTask;
+
     public Task SendPaymentRefundedAsync(string toEmail, string userName, string courtName, decimal amount, CancellationToken ct = default) =>
         Task.CompletedTask;
 }

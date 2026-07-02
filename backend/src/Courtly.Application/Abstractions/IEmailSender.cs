@@ -14,6 +14,9 @@ public interface IEmailSender
     /// <summary>Notifies the user their booking was cancelled, with an optional reason.</summary>
     Task SendBookingCancelledAsync(string toEmail, string userName, string courtName, DateTime startUtc, DateTime endUtc, string? reason, CancellationToken ct = default);
 
+    /// <summary>Notifies the user their booking was rescheduled to a new slot window, with an optional reason.</summary>
+    Task SendBookingRescheduledAsync(string toEmail, string userName, string courtName, DateTime startUtc, DateTime endUtc, string? reason, CancellationToken ct = default);
+
     /// <summary>Notifies the user a refund was issued for their booking.</summary>
     Task SendPaymentRefundedAsync(string toEmail, string userName, string courtName, decimal amount, CancellationToken ct = default);
 }

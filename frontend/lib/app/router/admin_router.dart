@@ -9,11 +9,12 @@ import '../../features/auth/presentation/login_screen.dart';
 import '../../features/court_catalog/presentation/courts_screen.dart';
 import '../../features/dashboard/presentation/dashboard_screen.dart';
 import '../../features/news/presentation/news_screen.dart';
-import '../../features/placeholders/feature_placeholder.dart';
 import '../../features/reference_data/presentation/settings_screen.dart';
 import '../../features/reports/presentation/reports_screen.dart';
 import '../../features/reservations/presentation/reservation_detail_screen.dart';
 import '../../features/reservations/presentation/reservations_screen.dart';
+import '../../features/users/presentation/user_detail_screen.dart';
+import '../../features/users/presentation/users_screen.dart';
 import '../shell/admin_shell.dart';
 
 /// Admin route paths (single source — rubric §3.4: no scattered string literals).
@@ -32,6 +33,11 @@ abstract final class AdminRoutes {
   /// [reservations]) and the full path for a given reservation id.
   static const String reservationDetailParam = ':id';
   static String reservationDetail(int id) => '$reservations/$id';
+
+  /// Path-parameter segment for the user detail route (child of [users]) and the
+  /// full path for a given user id (a `Guid` string, not an int).
+  static const String userDetailParam = ':id';
+  static String userDetail(String id) => '$users/$id';
 }
 
 /// Builds the admin desktop router with an auth guard. The redirect reads the
@@ -98,13 +104,24 @@ final adminRouterProvider = Provider<GoRouter>((ref) {
             ],
           ),
           _branch(AdminRoutes.courts, const CourtsScreen()),
-          _branch(
-            AdminRoutes.users,
-            const FeaturePlaceholder(
-              title: 'Users',
-              subtitle: 'Browse customers and their reservations.',
-              icon: Icons.people_outline,
-            ),
+          // Users: the list at /users with a full-screen detail route at
+          // /users/:id (kept inside the branch so the admin shell + nav stay;
+          // back returns to the list). The id is a Guid string (not int.parse).
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: AdminRoutes.users,
+                builder: (context, state) => const UsersScreen(),
+                routes: [
+                  GoRoute(
+                    path: AdminRoutes.userDetailParam,
+                    builder: (context, state) => UserDetailScreen(
+                      userId: state.pathParameters['id'] ?? '',
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ),
           _branch(AdminRoutes.reports, const ReportsScreen()),
           _branch(AdminRoutes.settings, const SettingsScreen()),

@@ -98,6 +98,7 @@ public sealed class NotificationConsumerBackgroundService : BackgroundService
                 case ReservationRoutingKeys.Created:
                 case ReservationRoutingKeys.Confirmed:
                 case ReservationRoutingKeys.Cancelled:
+                case ReservationRoutingKeys.Rescheduled:
                 case ReservationRoutingKeys.Completed:
                     reservationEvent = JsonSerializer.Deserialize<ReservationEvent>(
                         ea.Body.Span, MessagingTopology.SerializerOptions);
