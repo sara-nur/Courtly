@@ -6,7 +6,9 @@ plugins {
 
 android {
     namespace = "com.courtly"
-    compileSdk = flutter.compileSdkVersion
+    // Pinned to 36: transitive plugins (e.g. flutter_plugin_android_lifecycle via file_picker)
+    // now require compiling against Android API 36 or later.
+    compileSdk = 36
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
@@ -27,9 +29,13 @@ android {
 
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
+            // Signing with the debug keys so the release build/run works without a keystore.
             signingConfig = signingConfigs.getByName("debug")
+            // flutter_stripe references optional Stripe push-provisioning classes that are not
+            // bundled, so R8 full-mode shrinking fails the release build ("Missing classes").
+            // Code shrinking isn't required here, so disable it for a reliable release APK.
+            isMinifyEnabled = false
+            isShrinkResources = false
         }
     }
 }
