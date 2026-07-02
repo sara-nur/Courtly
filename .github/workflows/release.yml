@@ -1,0 +1,110 @@
+# Builds the two submission binaries and drafts a GitHub Release.
+#
+#   client APK   (Android, mobile)  -> lib/main_client.dart,  API_BASE_URL=http://10.0.2.2:5000
+#   admin  .exe  (Windows, desktop) -> lib/main_admin.dart,   API_BASE_URL=http://localhost:5000
+#
+# The two artifacts are packed into fit-build-<date>.zip with the exact folder layout the
+# grading rubric expects, then attached to a DRAFT release (you verify the contents and click
+# Publish yourself). There is no lib/main.dart, so every build MUST pass -t <entrypoint>.
+name: release
+
+on:
+  push:
+    tags:
+      - "predaja-*"          # e.g. predaja-2026-07-02
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag (e.g. predaja-2026-07-02)"
+        required: true
+
+permissions:
+  contents: write            # required to create the release / tag
+
+jobs:
+  android:
+    name: Build client APK (Android)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable    # pin flutter-version here for fully reproducible builds
+          cache: true
+      - name: flutter pub get
+        working-directory: frontend
+        run: flutter pub get
+      - name: flutter build apk (client)
+        working-directory: frontend
+        run: flutter build apk --release -t lib/main_client.dart --dart-define=API_BASE_URL=http://10.0.2.2:5000
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-apk
+          path: frontend/build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
+
+  windows:
+    name: Build admin .exe (Windows)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: enable windows desktop
+        working-directory: frontend
+        run: flutter config --enable-windows-desktop
+      - name: flutter pub get
+        working-directory: frontend
+        run: flutter pub get
+      - name: flutter build windows (admin)
+        working-directory: frontend
+        run: flutter build windows --release -t lib/main_admin.dart --dart-define=API_BASE_URL=http://localhost:5000
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-release
+          path: frontend/build/windows/x64/runner/Release/
+          if-no-files-found: error
+
+  release:
+    name: Package ZIP + draft release
+    needs: [android, windows]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Resolve tag and date
+        id: meta
+        run: |
+          TAG="${{ github.event.inputs.tag || github.ref_name }}"
+          DATE="${TAG#predaja-}"          # predaja-2026-07-02 -> 2026-07-02
+          echo "tag=$TAG"   >> "$GITHUB_OUTPUT"
+          echo "date=$DATE" >> "$GITHUB_OUTPUT"
+      # Download into the exact folder layout the rubric requires inside the ZIP:
+      #   <mobile>/build/app/outputs/flutter-apk/app-release.apk
+      #   <desktop>/build/windows/x64/runner/Release/...
+      - uses: actions/download-artifact@v4
+        with:
+          name: android-apk
+          path: staging/mobile/build/app/outputs/flutter-apk
+      - uses: actions/download-artifact@v4
+        with:
+          name: windows-release
+          path: staging/desktop/build/windows/x64/runner/Release
+      - name: Assemble fit-build ZIP
+        run: |
+          cd staging
+          zip -r "../fit-build-${{ steps.meta.outputs.date }}.zip" mobile desktop
+          cd ..
+          echo "----- ZIP contents -----"
+          unzip -l "fit-build-${{ steps.meta.outputs.date }}.zip"
+      - name: Draft release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.meta.outputs.tag }}
+          name: ${{ steps.meta.outputs.tag }}
+          draft: true          # you verify the ZIP, then Publish manually
+          files: fit-build-${{ steps.meta.outputs.date }}.zip

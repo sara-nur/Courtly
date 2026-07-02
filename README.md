@@ -54,8 +54,9 @@ flutter test                                     # widget tests
 # desktop admin — sign in (Admin/Staff only) → themed shell with top-nav
 # (Dashboard · Reservations · Courts · Users · Reports). Needs the API running.
 flutter run -d macos -t lib/main_admin.dart --dart-define=API_BASE_URL=http://localhost:5000
-# mobile client — bottom nav (Home / Search / Bookings / Notifications / Profile).
-# Placeholder shell for now; client login + screens land in feature 22.
+# mobile client — bottom nav (Home / Search / Bookings / Notifications / Profile):
+# browse/search courts, book + pay in-app (Stripe), bookings history, reviews,
+# recommendations, live notifications, profile. Sign in with a mobile/User account.
 flutter run -d emulator-5554 -t lib/main_client.dart --dart-define=API_BASE_URL=http://10.0.2.2:5000   # Android emulator
 flutter run -d "iPhone 17 Pro"  -t lib/main_client.dart --dart-define=API_BASE_URL=http://localhost:5000  # iOS Simulator
 ```
@@ -84,3 +85,40 @@ Seeded on startup (feature 4). Every account uses the password **`test`**. See
 > roles) and then runs an idempotent runtime seeder (users, courts with images, time slots, sample
 > reservations/payments/reviews/news). Re-running never duplicates rows. To reset from scratch:
 > `docker compose down -v && docker compose up --build`.
+
+## Release build & submission
+
+Binaries are **not** committed — they are produced by CI and attached to a GitHub Release.
+
+**CI (`.github/workflows/release.yml`).** Pushing a `predaja-YYYY-MM-DD` tag (or running the
+workflow manually from the Actions tab) builds both binaries and drafts a release:
+
+- **client APK** (Android) — `lib/main_client.dart`, `API_BASE_URL=http://10.0.2.2:5000`
+- **admin `.exe`** (Windows) — `lib/main_admin.dart`, `API_BASE_URL=http://localhost:5000`
+
+They are packed into `fit-build-<date>.zip` with the required layout:
+
+```
+fit-build-<date>.zip
+├── mobile/build/app/outputs/flutter-apk/app-release.apk
+└── desktop/build/windows/x64/runner/Release/…        (Courtly admin .exe + data)
+```
+
+**Publishing (immutable).** In **Settings → Releases**, enable **release immutability** first
+(applies to future releases only). The workflow creates the release as a **draft** — verify the
+ZIP contents, then **Publish**. Submit the tag-specific release link
+(`…/releases/tag/predaja-YYYY-MM-DD`), never `releases/latest`.
+
+**Secrets.** The `.env` is git-ignored. For grading, ship the working config as a
+password-protected archive alongside it:
+
+```bash
+zip -P fit .env-tajne.zip .env      # password: fit
+```
+
+`.env-tajne.zip` is git-ignored too; `git add -f .env-tajne.zip` to include it in the repo, and
+submit the password (`fit`) separately. Never put a plain `.env` in a release.
+
+**Clean-environment run** (what a grader does): fresh clone → `unzip -P fit .env-tajne.zip` →
+`docker compose up --build` → all four services healthy, log in with the credentials above —
+with **no** code, port, or connection-string edits.
