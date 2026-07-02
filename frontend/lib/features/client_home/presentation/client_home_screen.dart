@@ -10,9 +10,9 @@ import '../../court_catalog/domain/court_models.dart';
 import '../../court_catalog/presentation/widgets/client_court_card.dart';
 import '../../news/domain/news_models.dart';
 import '../../reservations/domain/reservation_models.dart';
+import '../../reservations/presentation/widgets/booking_summary_tile.dart';
 import '../application/home_controller.dart';
 import 'widgets/home_news_card.dart';
-import 'widgets/recent_booking_tile.dart';
 
 /// Client Home tab (F23, mockup p.8): a "Ready to serve?" hero with a tappable
 /// search entry + filter chips, a featured-courts carousel, the customer's
@@ -307,7 +307,10 @@ class _RecentBookingsSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const _SectionHeader(title: 'Recent Bookings'),
+        _SectionHeader(
+          title: 'Recent Bookings',
+          onSeeAll: () => context.go(ClientRoutes.bookings),
+        ),
         const SizedBox(height: AppSpacing.sm),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
@@ -317,7 +320,12 @@ class _RecentBookingsSection extends StatelessWidget {
                   children: [
                     for (var i = 0; i < bookings.length; i++) ...[
                       if (i > 0) const SizedBox(height: AppSpacing.sm),
-                      RecentBookingTile(reservation: bookings[i]),
+                      BookingSummaryTile(
+                        reservation: bookings[i],
+                        onTap: () => context.push(
+                          ClientRoutes.bookingDetailPath(bookings[i].id),
+                        ),
+                      ),
                     ],
                   ],
                 ),
