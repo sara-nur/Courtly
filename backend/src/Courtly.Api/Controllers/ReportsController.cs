@@ -10,17 +10,16 @@ namespace Courtly.Api.Controllers;
 /// <summary>
 /// The PDF reports API (feature 20). A thin controller over <see cref="IReportService"/>. Each report exposes a
 /// <c>/data</c> endpoint that returns the report rows as JSON (so the admin renders the report in-app as a table) and a
-/// PDF endpoint that returns the rendered, downloadable/printable <c>application/pdf</c>. Both reports are Admin/Staff
+/// PDF endpoint that returns the rendered, downloadable/printable <c>application/pdf</c>. Both reports are Admin
 /// only; the aggregation + rendering live in the service.
 /// </summary>
 [ApiController]
 [Route("api/reports")]
-[Authorize(Roles = AdminOrStaff)]
+[Authorize(Roles = Roles.Admin)]
 [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
 [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status403Forbidden)]
 public sealed class ReportsController : ControllerBase
 {
-    private const string AdminOrStaff = Roles.Admin + "," + Roles.Staff;
     private const string Pdf = "application/pdf";
 
     private readonly IReportService _reports;

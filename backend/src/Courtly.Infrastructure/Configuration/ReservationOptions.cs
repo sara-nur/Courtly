@@ -13,4 +13,8 @@ public sealed class ReservationOptions
 
     /// <summary>How often the Worker scans for expired Pending holds, in seconds. Bound from <c>RESERVATION_HOLD_SCAN_SECONDS</c>; default 60.</summary>
     public int HoldScanSeconds { get; set; } = 60;
+
+    /// <summary>How often the Worker scans for Confirmed reservations whose slot has ended, to auto-complete them, in
+    /// seconds. Bound from <c>RESERVATION_AUTOCOMPLETE_SCAN_SECONDS</c>; default 300.</summary>
+    public int AutoCompleteScanSeconds { get; set; } = 300;
 }

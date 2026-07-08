@@ -92,6 +92,14 @@ public sealed class PaymentService : IPaymentService
             throw new BusinessException("Only a pending reservation can be paid.");
         }
 
+        // The hold is the window in which the slot is reserved for this user. Once it has expired the reservation is
+        // no longer payable (the hold-expiry worker will cancel it): creating or re-fetching an intent here would let a
+        // user be charged for a slot they no longer hold — the exact "charged but not confirmed" hazard we must avoid.
+        if (reservation.HoldExpiresAtUtc is { } holdExpiry && holdExpiry <= _clock.UtcNow)
+        {
+            throw new BusinessException("The reservation hold has expired; please create a new reservation.");
+        }
+
         // A reservation has at most one payment (the 1:1 unique FK is the hard double-pay guard).
         if (reservation.Payment is { } existing)
         {
@@ -181,7 +189,8 @@ public sealed class PaymentService : IPaymentService
             return;
         }
 
-        await FinalizeAsync(webhookEvent.PaymentIntentId, webhookEvent.AmountReceivedCents, ct);
+        await FinalizeAsync(
+            webhookEvent.PaymentIntentId, webhookEvent.AmountReceivedCents, webhookEvent.Currency, ct);
     }
 
     public async Task<PaymentDto> RefundAsync(
@@ -208,56 +217,104 @@ public sealed class PaymentService : IPaymentService
             throw new BusinessException("This payment has already been refunded.");
         }
 
-        if (payment.Status != PaymentStatus.Succeeded || string.IsNullOrEmpty(payment.ProviderPaymentIntentId))
+        // A captured charge can be refunded whether it finalized cleanly (Succeeded) or was parked for review
+        // (RequiresReview — e.g. a webhook amount/currency mismatch): in both cases Stripe is holding real money.
+        if (payment.Status is not (PaymentStatus.Succeeded or PaymentStatus.RequiresReview)
+            || string.IsNullOrEmpty(payment.ProviderPaymentIntentId))
         {
             throw new BusinessException("Only a paid reservation can be refunded.");
         }
 
-        // Prove the cancellation is legal BEFORE the external Stripe call, so we never refund then fail to persist
-        // (e.g. a completed booking is terminal and can't be cancelled — rubric §7).
-        ReservationStateMachine.EnsureCanTransition(reservation.Status, ReservationStatus.Cancelled);
+        // If the reservation is still active the refund also cancels it — prove that transition is legal BEFORE the
+        // external Stripe call. An already-Cancelled reservation (e.g. its hold expired, then a late webhook parked the
+        // payment for review) is refunded without forcing a second, illegal transition. A Completed booking was
+        // fulfilled, so it is NOT refundable through this cancel-refund flow (rejected before any Stripe call).
+        var cancelReservation = !ReservationStateMachine.IsTerminal(reservation.Status);
+        if (cancelReservation)
+        {
+            ReservationStateMachine.EnsureCanTransition(reservation.Status, ReservationStatus.Cancelled);
+        }
+        else if (reservation.Status != ReservationStatus.Cancelled)
+        {
+            throw new BusinessException("A completed reservation cannot be refunded.");
+        }
 
         // Refund the actually-charged amount, never a recomputed price (rubric §7.1).
         var chargedCents = payment.AmountChargedCents ?? ToCents(payment.Amount);
-        var refundResult = await _stripe.CreateRefundAsync(payment.ProviderPaymentIntentId, chargedCents, reason, ct);
-
         var now = _clock.UtcNow;
-        payment.Status = PaymentStatus.Refunded;
+
+        // Persist the intent-to-refund BEFORE the external Stripe call. If Stripe then succeeds but the follow-up
+        // local write fails, the database shows a discoverable Pending refund row instead of the dangerous silent
+        // state "money returned at Stripe but payment still Succeeded and reservation still active".
         var refund = new Refund
         {
             PaymentId = payment.Id,
-            Status = RefundStatus.Succeeded,
+            Status = RefundStatus.Pending,
             Amount = chargedCents / (decimal)CentsPerUnit,
-            ProviderRefundId = refundResult.Id,
             Reason = reason,
             CreatedAtUtc = now,
         };
         payment.Refunds.Add(refund);
+        await _db.SaveChangesAsync(ct);
 
-        reservation.Audits.Add(NewAudit(reservation.Status, ReservationStatus.Cancelled, reason, now, CurrentUserId()));
-        reservation.Status = ReservationStatus.Cancelled;
-        reservation.CancelledAtUtc = now;
-        reservation.CancellationReason = reason;
+        RefundResult refundResult;
+        try
+        {
+            refundResult = await _stripe.CreateRefundAsync(payment.ProviderPaymentIntentId, chargedCents, reason, ct);
+        }
+        catch (Exception ex)
+        {
+            // Stripe failed — mark the pending row Failed so it is never mistaken for money returned, and surface the
+            // error. The payment stays as-is and the reservation is untouched (nothing was refunded).
+            _logger.LogError(
+                ex, "Stripe refund failed for payment {PaymentId}; marking refund {RefundId} Failed.",
+                payment.Id, refund.Id);
+            refund.Status = RefundStatus.Failed;
+            await _db.SaveChangesAsync(ct);
+            throw;
+        }
 
-        // One SaveChanges commits the refund + the cancellation + its audit atomically (rubric §3.4).
+        // Stripe succeeded — promote the refund, mark the payment Refunded, and (if it was still active) cancel the
+        // reservation, all in one SaveChanges (rubric §3.4).
+        refund.Status = RefundStatus.Succeeded;
+        refund.ProviderRefundId = refundResult.Id;
+        payment.Status = PaymentStatus.Refunded;
+
+        if (cancelReservation)
+        {
+            reservation.Audits.Add(
+                NewAudit(reservation.Status, ReservationStatus.Cancelled, reason, now, CurrentUserId()));
+            reservation.Status = ReservationStatus.Cancelled;
+            reservation.CancelledAtUtc = now;
+            reservation.CancellationReason = reason;
+        }
+
         await _db.SaveChangesAsync(ct);
 
         await _paymentEvents.PublishAsync(new PaymentEvent(
             PaymentRoutingKeys.Refunded, payment.Id, reservation.Id, reservation.UserId,
             refund.Amount, payment.AmountChargedCents, now), ct);
-        await PublishReservationEventAsync(ReservationRoutingKeys.Cancelled, reservation, reason, now, ct);
+        if (cancelReservation)
+        {
+            await PublishReservationEventAsync(ReservationRoutingKeys.Cancelled, reservation, reason, now, ct);
+        }
 
         _logger.LogInformation(
-            "Refunded payment {PaymentId} ({Cents} cents) and cancelled reservation {ReservationId}.",
-            payment.Id, chargedCents, reservation.Id);
+            "Refunded payment {PaymentId} ({Cents} cents); reservation {ReservationId} cancelled: {Cancelled}.",
+            payment.Id, chargedCents, reservation.Id, cancelReservation);
 
         return ToPaymentDto(payment, refund);
     }
 
-    /// <summary>The idempotent finalize the webhook drives: marks the payment Succeeded with the actually-charged
-    /// cents and confirms a Pending reservation, all in one SaveChanges. A replayed event (payment already Succeeded)
-    /// is a no-op (rubric §7.1).</summary>
-    private async Task FinalizeAsync(string paymentIntentId, long? amountReceivedCents, CancellationToken ct)
+    /// <summary>The idempotent finalize the webhook drives. The webhook is the authoritative record of the real
+    /// charge, so it is the strictest checkpoint: before a payment is treated as a clean success it must match the
+    /// reservation's expected amount and currency AND the reservation must still be confirmable (Pending). On a match
+    /// it marks the payment Succeeded and confirms the reservation in one SaveChanges. On any mismatch — wrong amount,
+    /// wrong currency, or a reservation that is no longer Pending — the money was still captured at Stripe, so the
+    /// payment is parked in <see cref="PaymentStatus.RequiresReview"/> for staff/admin (never a false Succeeded, never
+    /// an illegal confirm). A replayed event for an already terminal/review payment is a no-op (rubric §7.1).</summary>
+    private async Task FinalizeAsync(
+        string paymentIntentId, long? amountReceivedCents, string? currency, CancellationToken ct)
     {
         var payment = await _db.Payments
             .Include(p => p.Reservation)
@@ -271,48 +328,65 @@ public sealed class PaymentService : IPaymentService
             return;
         }
 
-        if (payment.Status == PaymentStatus.Succeeded)
+        // A replayed webhook for a payment we've already finalized, refunded, or parked for review must not be
+        // reprocessed (idempotent, rubric §7.1).
+        if (payment.Status is PaymentStatus.Succeeded or PaymentStatus.Refunded or PaymentStatus.RequiresReview)
         {
             _logger.LogInformation(
-                "Payment {PaymentId} already finalized; ignoring replayed webhook (idempotent).", payment.Id);
+                "Payment {PaymentId} is already {Status}; ignoring replayed webhook (idempotent).",
+                payment.Id, payment.Status);
             return;
         }
 
         var now = _clock.UtcNow;
+        var reservation = payment.Reservation;
+
+        // Verify the real charge against what the reservation expected. The amount comes from the server-owned price;
+        // the currency from the single configured Stripe currency (compared only when the webhook exposes it).
+        var expectedCents = ToCents(payment.Amount);
+        var amountMismatch = amountReceivedCents is { } received && received != expectedCents;
+        var currencyMismatch = !string.IsNullOrEmpty(currency)
+            && !string.Equals(currency, _currency, StringComparison.OrdinalIgnoreCase);
+        var reservationNotConfirmable = reservation.Status != ReservationStatus.Pending;
+
+        if (amountMismatch || currencyMismatch || reservationNotConfirmable)
+        {
+            // Money was captured but something is off — hold it for manual resolution (typically a refund via
+            // RefundAsync). We deliberately do NOT publish a "succeeded" event: nothing downstream should tell the
+            // user the booking is paid/confirmed.
+            payment.Status = PaymentStatus.RequiresReview;
+            payment.AmountChargedCents = amountReceivedCents ?? expectedCents; // record what Stripe actually reported
+            payment.PaidAtUtc = now;
+
+            _logger.LogError(
+                "Payment {PaymentId} for reservation {ReservationId} needs manual review — " +
+                "amountMismatch={AmountMismatch} (expected {Expected}, received {Received}), " +
+                "currencyMismatch={CurrencyMismatch} (expected {ExpectedCurrency}, received {ReceivedCurrency}), " +
+                "reservationStatus={Status}.",
+                payment.Id, reservation.Id, amountMismatch, expectedCents, amountReceivedCents,
+                currencyMismatch, _currency, currency, reservation.Status);
+
+            await _db.SaveChangesAsync(ct);
+            return;
+        }
+
+        // Normal path: the charge matches and the reservation is still Pending — mark Succeeded and confirm, all in one
+        // SaveChanges (payment + reservation transition + audit, atomic, rubric §3.4).
         payment.Status = PaymentStatus.Succeeded;
-        payment.AmountChargedCents = amountReceivedCents ?? ToCents(payment.Amount);
+        payment.AmountChargedCents = amountReceivedCents ?? expectedCents;
         payment.PaidAtUtc = now;
 
-        var reservation = payment.Reservation;
-        var confirmed = false;
-        if (reservation.Status == ReservationStatus.Pending)
-        {
-            ReservationStateMachine.EnsureCanTransition(reservation.Status, ReservationStatus.Confirmed);
-            reservation.Audits.Add(NewAudit(
-                ReservationStatus.Pending, ReservationStatus.Confirmed, "Payment succeeded.", now, changedBy: null));
-            reservation.Status = ReservationStatus.Confirmed;
-            confirmed = true;
-        }
-        else
-        {
-            // The hold may have expired and the reservation already been cancelled (F17), or an admin pre-confirmed it.
-            // Record the money regardless; don't force an illegal transition.
-            _logger.LogWarning(
-                "Finalizing payment {PaymentId} for reservation {ReservationId} in {Status} state (not Pending).",
-                payment.Id, reservation.Id, reservation.Status);
-        }
+        ReservationStateMachine.EnsureCanTransition(reservation.Status, ReservationStatus.Confirmed);
+        reservation.Audits.Add(NewAudit(
+            ReservationStatus.Pending, ReservationStatus.Confirmed, "Payment succeeded.", now, changedBy: null));
+        reservation.Status = ReservationStatus.Confirmed;
 
-        // One SaveChanges commits the payment + the reservation transition + its audit atomically (rubric §3.4).
         await _db.SaveChangesAsync(ct);
 
         await _paymentEvents.PublishAsync(new PaymentEvent(
             PaymentRoutingKeys.Succeeded, payment.Id, reservation.Id, reservation.UserId,
             payment.Amount, payment.AmountChargedCents, now), ct);
-
-        if (confirmed)
-        {
-            await PublishReservationEventAsync(ReservationRoutingKeys.Confirmed, reservation, reason: null, now, ct);
-        }
+        await PublishReservationEventAsync(ReservationRoutingKeys.Confirmed, reservation, reason: null, now, ct);
 
         _logger.LogInformation(
             "Finalized payment {PaymentId} for reservation {ReservationId} (charged {Cents} cents).",
@@ -373,6 +447,7 @@ public sealed class PaymentService : IPaymentService
         PaymentStatus.Succeeded => "Succeeded",
         PaymentStatus.Failed => "Failed",
         PaymentStatus.Refunded => "Refunded",
+        PaymentStatus.RequiresReview => "Requires review",
         _ => status.ToString(),
     };
 

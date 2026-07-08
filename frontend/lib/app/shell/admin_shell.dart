@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/constants/app_roles.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/widgets/confirm_dialog.dart';
@@ -19,11 +20,11 @@ class AdminShell extends ConsumerWidget {
   final StatefulNavigationShell navigationShell;
 
   static const List<_AdminNavItem> _items = [
-    _AdminNavItem('Dashboard', Icons.dashboard_outlined),
+    _AdminNavItem('Dashboard', Icons.dashboard_outlined, adminOnly: true),
     _AdminNavItem('Reservations', Icons.event_note_outlined),
     _AdminNavItem('Courts', Icons.sports_tennis_outlined),
     _AdminNavItem('Users', Icons.people_outline),
-    _AdminNavItem('Reports', Icons.bar_chart_outlined),
+    _AdminNavItem('Reports', Icons.bar_chart_outlined, adminOnly: true),
     _AdminNavItem('Settings', Icons.settings_outlined),
     _AdminNavItem('News', Icons.newspaper_outlined),
   ];
@@ -44,11 +45,21 @@ class AdminShell extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final user = ref.watch(authControllerProvider).user;
+    final isAdmin = user?.hasAnyRole({AppRoles.admin}) ?? false;
+
+    // Dashboard + Reports are Admin-only (enforced by the API). Hide them for
+    // non-admins, keeping each visible tab's TRUE branch index so navigation and
+    // the selected-tab highlight stay aligned with the shell's indexed stack.
+    final entries = <({int branch, _AdminNavItem item})>[
+      for (var i = 0; i < _items.length; i++)
+        if (isAdmin || !_items[i].adminOnly) (branch: i, item: _items[i]),
+    ];
+
     return Scaffold(
       body: Column(
         children: [
           _TopNav(
-            items: _items,
+            entries: entries,
             currentIndex: navigationShell.currentIndex,
             user: user,
             onSelect: (index) => navigationShell.goBranch(
@@ -74,21 +85,25 @@ class AdminShell extends ConsumerWidget {
 }
 
 class _AdminNavItem {
-  const _AdminNavItem(this.label, this.icon);
+  const _AdminNavItem(this.label, this.icon, {this.adminOnly = false});
   final String label;
   final IconData icon;
+
+  /// Only shown to Admins (the API restricts the underlying endpoints to Admin).
+  final bool adminOnly;
 }
 
 class _TopNav extends StatelessWidget {
   const _TopNav({
-    required this.items,
+    required this.entries,
     required this.currentIndex,
     required this.user,
     required this.onSelect,
     required this.onSignOut,
   });
 
-  final List<_AdminNavItem> items;
+  /// Visible tabs, each carrying its true branch index in the shell's indexed stack.
+  final List<({int branch, _AdminNavItem item})> entries;
   final int currentIndex;
   final AuthUser? user;
   final ValueChanged<int> onSelect;
@@ -107,11 +122,11 @@ class _TopNav extends StatelessWidget {
         children: [
           const CourtlyLogo(showAdminSuffix: true),
           const SizedBox(width: AppSpacing.xl),
-          for (var i = 0; i < items.length; i++)
+          for (final entry in entries)
             _NavTab(
-              item: items[i],
-              selected: i == currentIndex,
-              onTap: () => onSelect(i),
+              item: entry.item,
+              selected: entry.branch == currentIndex,
+              onTap: () => onSelect(entry.branch),
             ),
           const Spacer(),
           _ProfileMenu(user: user, onSignOut: onSignOut),

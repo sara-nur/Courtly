@@ -26,8 +26,10 @@ builder.Services.AddRabbitMqConnection();
 builder.Services.AddRabbitMqMessaging();                // real publisher (hold-expiry publishes reservation.cancelled)
 builder.Services.AddCourtlySmtpEmail();                 // IEmailSender -> SmtpEmailSender
 builder.Services.AddScoped<ReservationHoldExpiryService>();
+builder.Services.AddScoped<ReservationAutoCompleteService>();
 builder.Services.AddHostedService<EmailConsumerBackgroundService>();
 builder.Services.AddHostedService<HoldExpiryBackgroundService>();
+builder.Services.AddHostedService<AutoCompleteBackgroundService>();
 
 // Feature 18: persist a notification per consumed event, then push it to the API's internal SignalR endpoint.
 builder.Services.AddCourtlyNotificationWriter();

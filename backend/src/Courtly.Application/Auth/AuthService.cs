@@ -140,6 +140,26 @@ public sealed class AuthService : IAuthService
         return new AuthResponse(accessToken, rawRefresh, accessExpires, ToUserInfo(user, roles));
     }
 
+    /// <summary>Revokes every currently-active (not yet revoked, not yet expired) refresh token for a user by stamping
+    /// <c>RevokedAtUtc</c>. Called after a password reset/change so those credentials can no longer mint access tokens.
+    /// The change is staged on the context; the caller commits it in its own <c>SaveChangesAsync</c>.</summary>
+    private async Task RevokeActiveRefreshTokensAsync(Guid userId, DateTime now, CancellationToken ct)
+    {
+        var active = await _db.RefreshTokens
+            .Where(t => t.UserId == userId && t.RevokedAtUtc == null && t.ExpiresAtUtc > now)
+            .ToListAsync(ct);
+
+        foreach (var token in active)
+        {
+            token.RevokedAtUtc = now;
+        }
+
+        if (active.Count > 0)
+        {
+            _logger.LogInformation("Revoked {Count} active refresh token(s) for user {UserId}.", active.Count, userId);
+        }
+    }
+
     public async Task LogoutAsync(
         Guid userId,
         string accessTokenJti,
@@ -217,8 +237,10 @@ public sealed class AuthService : IAuthService
         }
 
         // Validate the new password against Identity's configured policy first, so a policy-rejected attempt
-        // leaves the reset token unused (retryable). Then set the hash directly and rotate the security stamp
-        // (invalidating other sessions) — avoids Identity's data-protection token providers entirely.
+        // leaves the reset token unused (retryable). Then set the hash directly — avoids Identity's data-protection
+        // token providers entirely. We also revoke the user's active refresh tokens below: this is a JWT API and the
+        // security stamp is NOT checked in the AddJwtBearer pipeline, so rotating the stamp alone would not stop a
+        // still-valid refresh token from minting fresh access tokens after a reset.
         foreach (var validator in _userManager.PasswordValidators)
         {
             var validation = await validator.ValidateAsync(_userManager, user, request.NewPassword);
@@ -239,6 +261,7 @@ public sealed class AuthService : IAuthService
         user.PasswordHash = _userManager.PasswordHasher.HashPassword(user, request.NewPassword);
         stored.UsedAtUtc = now;
         await _userManager.UpdateSecurityStampAsync(user);
+        await RevokeActiveRefreshTokensAsync(user.Id, now, ct); // end existing sessions (see note above)
         await _db.SaveChangesAsync(ct);
         if (tx is not null)
         {
@@ -286,14 +309,22 @@ public sealed class AuthService : IAuthService
         user.CityId = request.CityId;
 
         // Email doubles as a login identifier. Only touch Identity's email fields when it actually changes;
-        // RequireUniqueEmail turns a collision into an IdentityError we surface below the Email field. UserName
-        // is left untouched — login accepts username-or-email, so the change never locks anyone out.
+        // RequireUniqueEmail turns a collision into an IdentityError we surface below the Email field. Registration
+        // sets UserName = Email and login uses FindByNameOrEmailAsync (username first, then email), so UserName must
+        // move with the email — otherwise the OLD email keeps working as a login and stays reserved as a username,
+        // and the freed address can't be reused. Keep both in sync.
         if (!string.Equals(user.Email, request.Email, StringComparison.OrdinalIgnoreCase))
         {
             var setEmail = await _userManager.SetEmailAsync(user, request.Email);
             if (!setEmail.Succeeded)
             {
                 throw new ValidationException(DescribeErrors(setEmail), ToFieldErrors(setEmail, "email"));
+            }
+
+            var setUserName = await _userManager.SetUserNameAsync(user, request.Email);
+            if (!setUserName.Succeeded)
+            {
+                throw new ValidationException(DescribeErrors(setUserName), ToFieldErrors(setUserName, "email"));
             }
         }
 
@@ -336,6 +367,13 @@ public sealed class AuthService : IAuthService
 
             throw new ValidationException(DescribeErrors(result), ToFieldErrors(result, "newPassword"));
         }
+
+        // ChangePasswordAsync rotates the security stamp, but this JWT API doesn't check the stamp, so a still-valid
+        // refresh token could keep minting access tokens. Explicitly revoke the user's active refresh tokens so the
+        // password change actually ends other sessions.
+        var now = _clock.UtcNow;
+        await RevokeActiveRefreshTokensAsync(user.Id, now, ct);
+        await _db.SaveChangesAsync(ct);
 
         _logger.LogInformation("User {UserId} changed their password.", user.Id);
     }

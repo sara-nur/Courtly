@@ -91,12 +91,21 @@ public static class CourtlyOptionsServiceCollectionExtensions
             .Validate(o => !string.IsNullOrWhiteSpace(o.ResetPasswordUrl), "APP_RESET_PASSWORD_URL is required.")
             .ValidateOnStart();
 
-        // Feature 14: how long an unpaid Pending reservation holds its slot (the Worker releases expired holds in F17).
+        // Feature 14: how long an unpaid Pending reservation holds its slot (the Worker releases expired holds in F17),
+        // and how often the Worker auto-completes Confirmed reservations once their slot has ended.
         services.AddOptions<ReservationOptions>()
             .Configure(o =>
             {
                 o.HoldMinutes = ParseInt(config["RESERVATION_HOLD_MINUTES"], 15);
                 o.HoldScanSeconds = ParseInt(config["RESERVATION_HOLD_SCAN_SECONDS"], 60);
+                o.AutoCompleteScanSeconds = ParseInt(config["RESERVATION_AUTOCOMPLETE_SCAN_SECONDS"], 300);
+            });
+
+        // Court business locale: the IANA time zone slot generation/availability interpret opening hours in.
+        services.AddOptions<LocalizationOptions>()
+            .Configure(o =>
+            {
+                o.TimeZoneId = config["COURT_TIME_ZONE"] is { Length: > 0 } tz ? tz : "Europe/Sarajevo";
             });
 
         return services;

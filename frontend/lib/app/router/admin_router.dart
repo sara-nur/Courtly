@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/constants/app_roles.dart';
 import '../../features/auth/application/auth_controller.dart';
 import '../../features/auth/domain/auth_models.dart';
 import '../../features/auth/presentation/auth_splash.dart';
@@ -65,8 +66,20 @@ final adminRouterProvider = Provider<GoRouter>((ref) {
         case AuthStatus.unauthenticated:
           return atLogin ? null : AdminRoutes.login;
         case AuthStatus.authenticated:
-          // Bounce away from the auth-only screens once signed in.
-          return (atLogin || atSplash) ? AdminRoutes.dashboard : null;
+          // Dashboard + Reports are Admin-only (the API enforces it). Land non-admins
+          // on Reservations and bounce them away from those two sections so Staff never
+          // hit a 403 screen.
+          final user = ref.read(authControllerProvider).user;
+          final isAdmin = user?.hasAnyRole({AppRoles.admin}) ?? false;
+          final home = isAdmin ? AdminRoutes.dashboard : AdminRoutes.reservations;
+          if (atLogin || atSplash) {
+            return home;
+          }
+          if (!isAdmin &&
+              (location == AdminRoutes.dashboard || location == AdminRoutes.reports)) {
+            return AdminRoutes.reservations;
+          }
+          return null;
       }
     },
     routes: [
