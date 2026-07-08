@@ -43,7 +43,6 @@ public class CourtlyDbContext : IdentityDbContext<AppUser, IdentityRole<Guid>, G
     public DbSet<News> News => Set<News>();
     public DbSet<SearchHistory> SearchHistories => Set<SearchHistory>();
     public DbSet<RecommendationFeedback> RecommendationFeedbacks => Set<RecommendationFeedback>();
-    public DbSet<Favorite> Favorites => Set<Favorite>();
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
     public DbSet<RevokedToken> RevokedTokens => Set<RevokedToken>();
     public DbSet<PasswordResetToken> PasswordResetTokens => Set<PasswordResetToken>();

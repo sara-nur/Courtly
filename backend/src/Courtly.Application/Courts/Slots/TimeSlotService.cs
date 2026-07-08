@@ -2,9 +2,11 @@ using Courtly.Application.Abstractions;
 using Courtly.Application.Common.Exceptions;
 using Courtly.Contracts.Court;
 using Courtly.Domain.Enums;
+using Courtly.Infrastructure.Configuration;
 using Courtly.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace Courtly.Application.Courts.Slots;
 
@@ -16,9 +18,14 @@ namespace Courtly.Application.Courts.Slots;
 /// and projected to DTOs (never entities).
 /// </summary>
 /// <remarks>
-/// <para><b>Bucketing + price.</b> A slot's bucket is derived from its start hour (Morning &lt; 12, Afternoon &lt; 17,
-/// Evening otherwise) — the same thresholds the seeder uses. The price is the court's hourly rate scaled by the slot
-/// duration, with an optional evening peak multiplier (server-owned; default <see cref="DefaultEveningPeakMultiplier"/>).</para>
+/// <para><b>Time zone.</b> Opening hours are business-<i>local</i> (the court's configured zone, default
+/// Europe/Sarajevo). Generation interprets <c>date + OpenHour</c> as local time and converts it to UTC for storage, and
+/// availability treats a day as the local business day — so an admin's 08:00 shows as 08:00 to users regardless of the
+/// UTC offset or DST.</para>
+/// <para><b>Bucketing + price.</b> A slot's bucket is derived from its <i>local</i> start hour (Morning &lt; 12,
+/// Afternoon &lt; 17, Evening otherwise) — the same thresholds the seeder uses. The price is the court's hourly rate
+/// scaled by the slot duration, with an optional evening peak multiplier (server-owned; default
+/// <see cref="DefaultEveningPeakMultiplier"/>).</para>
 /// <para><b>Duplicates.</b> Generation skips any start that already exists for the court (so re-generating an
 /// overlapping range is idempotent); the <c>Unique(CourtId,StartUtc)</c> index is the hard DB-level guard behind it.</para>
 /// <para><b>Maintenance.</b> Availability reuses the feature-12 exclusion query
@@ -34,6 +41,10 @@ public sealed class TimeSlotService : ITimeSlotService
     private readonly IMaintenanceService _maintenance;
     private readonly ILogger<TimeSlotService> _logger;
 
+    /// <summary>The courts' business-local time zone (configurable, default Europe/Sarajevo). Admin opening hours are
+    /// interpreted in this zone, then converted to UTC for storage; the day window and buckets are the local day/hour.</summary>
+    private readonly TimeZoneInfo _timeZone;
+
     // Server-owned slot rules (rubric §3.4: magic numbers → consts). Bucket thresholds mirror the seeder.
     private const int MorningEndHour = 12;   // [0, 12)  → Morning
     private const int AfternoonEndHour = 17; // [12, 17) → Afternoon; [17, 24) → Evening
@@ -45,12 +56,33 @@ public sealed class TimeSlotService : ITimeSlotService
         { TimeOfDayBucket.Morning, TimeOfDayBucket.Afternoon, TimeOfDayBucket.Evening };
 
     public TimeSlotService(
-        CourtlyDbContext db, IClock clock, IMaintenanceService maintenance, ILogger<TimeSlotService> logger)
+        CourtlyDbContext db,
+        IClock clock,
+        IMaintenanceService maintenance,
+        IOptions<LocalizationOptions> localization,
+        ILogger<TimeSlotService> logger)
     {
         _db = db;
         _clock = clock;
         _maintenance = maintenance;
         _logger = logger;
+        _timeZone = ResolveTimeZone(localization.Value.TimeZoneId, logger);
+    }
+
+    /// <summary>Resolves the configured IANA time zone, falling back to UTC (with an error log) if it can't be found —
+    /// a misconfiguration degrades to the old UTC behaviour rather than 500-ing every slot request.</summary>
+    private static TimeZoneInfo ResolveTimeZone(string timeZoneId, ILogger<TimeSlotService> logger)
+    {
+        try
+        {
+            return TimeZoneInfo.FindSystemTimeZoneById(timeZoneId);
+        }
+        catch (Exception ex) when (ex is TimeZoneNotFoundException or InvalidTimeZoneException)
+        {
+            logger.LogError(
+                ex, "Court time zone '{TimeZoneId}' could not be resolved; falling back to UTC.", timeZoneId);
+            return TimeZoneInfo.Utc;
+        }
     }
 
     public async Task<GenerateSlotsResult> GenerateAsync(
@@ -62,9 +94,10 @@ public sealed class TimeSlotService : ITimeSlotService
         var slotMinutes = request.SlotMinutes;
         var peakMultiplier = request.EveningPeakMultiplier ?? DefaultEveningPeakMultiplier;
 
-        // The whole range in UTC, [FromDate 00:00, ToDate+1 00:00), for the existing-starts lookup.
-        var rangeStartUtc = ToUtcMidnight(request.FromDate);
-        var rangeEndUtc = ToUtcMidnight(request.ToDate.AddDays(1));
+        // The whole range as UTC instants covering the local business days [FromDate 00:00, ToDate+1 00:00) local,
+        // for the existing-starts lookup.
+        var rangeStartUtc = LocalDayStartUtc(request.FromDate);
+        var rangeEndUtc = LocalDayStartUtc(request.ToDate.AddDays(1));
 
         // Existing slot starts in the range — used to skip duplicates so a re-generate is idempotent rather than a
         // unique-index violation. (The index remains the hard guard for concurrent generators.)
@@ -79,14 +112,15 @@ public sealed class TimeSlotService : ITimeSlotService
 
         for (var date = request.FromDate; date <= request.ToDate; date = date.AddDays(1))
         {
-            var dayStart = ToUtcMidnight(date);
             var openMinute = request.OpenHour * MinutesPerHour;
             var closeMinute = request.CloseHour * MinutesPerHour;
 
             // Step by slotMinutes while the whole slot fits before the close time.
             for (var minute = openMinute; minute + slotMinutes <= closeMinute; minute += slotMinutes)
             {
-                var startUtc = dayStart.AddMinutes(minute);
+                // The admin's opening hour is business-LOCAL time — interpret (date + minute) in the court's zone and
+                // convert to UTC for storage, so 08:00 entered for a BiH court is 08:00 local, not 08:00 UTC.
+                var startUtc = LocalSlotStartUtc(date, minute);
 
                 // seenStarts doubles as the "already created" set, so an existing OR just-queued start is skipped once.
                 if (!seenStarts.Add(startUtc))
@@ -95,7 +129,8 @@ public sealed class TimeSlotService : ITimeSlotService
                     continue;
                 }
 
-                var bucket = BucketForHour(startUtc.Hour);
+                // Bucket from the LOCAL hour (the admin's intended hour), never the UTC hour.
+                var bucket = BucketForHour(minute / MinutesPerHour);
                 toAdd.Add(new Domain.Entities.TimeSlot
                 {
                     CourtId = courtId,
@@ -126,8 +161,9 @@ public sealed class TimeSlotService : ITimeSlotService
     {
         await EnsureCourtExistsAsync(courtId, ct);
 
-        var dayStartUtc = ToUtcMidnight(date);
-        var dayEndUtc = dayStartUtc.AddDays(1);
+        // The day is the court's LOCAL business day, converted to UTC instants (handles DST-length days correctly).
+        var dayStartUtc = LocalDayStartUtc(date);
+        var dayEndUtc = LocalDayStartUtc(date.AddDays(1));
 
         // Maintenance exclusion (feature 12 reuse): a court under maintenance for the day yields no bookable slots.
         var underMaintenanceIds = await _maintenance.GetCourtIdsUnderMaintenanceAsync(dayStartUtc, dayEndUtc, ct);
@@ -187,8 +223,9 @@ public sealed class TimeSlotService : ITimeSlotService
     {
         await EnsureCourtExistsAsync(courtId, ct);
 
-        var dayStartUtc = ToUtcMidnight(date);
-        var dayEndUtc = dayStartUtc.AddDays(1);
+        // The day is the court's LOCAL business day, converted to UTC instants (handles DST-length days correctly).
+        var dayStartUtc = LocalDayStartUtc(date);
+        var dayEndUtc = LocalDayStartUtc(date.AddDays(1));
 
         var slots = await _db.TimeSlots
             .Where(s => s.CourtId == courtId && s.StartUtc >= dayStartUtc && s.StartUtc < dayEndUtc)
@@ -296,9 +333,23 @@ public sealed class TimeSlotService : ITimeSlotService
         _ => bucket.ToString(),
     };
 
-    /// <summary>Midnight (UTC) of a <see cref="DateOnly"/> — the canonical UTC anchor for a day's slots.</summary>
-    private static DateTime ToUtcMidnight(DateOnly date) =>
-        new(date.Year, date.Month, date.Day, 0, 0, 0, DateTimeKind.Utc);
+    /// <summary>The UTC instant of local midnight for a <see cref="DateOnly"/> in the court's time zone — the anchor
+    /// for a local business day (used for day windows and generation range bounds).</summary>
+    private DateTime LocalDayStartUtc(DateOnly date) => LocalToUtc(date, minutes: 0);
+
+    /// <summary>The UTC instant of a local time <paramref name="minutes"/> minutes past midnight on
+    /// <paramref name="date"/> in the court's time zone — used to place each generated slot's start.</summary>
+    private DateTime LocalSlotStartUtc(DateOnly date, int minutes) => LocalToUtc(date, minutes);
+
+    /// <summary>Interprets (<paramref name="date"/> midnight + <paramref name="minutes"/>) as an unspecified LOCAL time
+    /// in the court's zone and converts it to UTC. Each slot is converted independently so DST transitions are handled
+    /// per-instant rather than assuming a fixed 24h day.</summary>
+    private DateTime LocalToUtc(DateOnly date, int minutes)
+    {
+        var local = new DateTime(date.Year, date.Month, date.Day, 0, 0, 0, DateTimeKind.Unspecified)
+            .AddMinutes(minutes);
+        return TimeZoneInfo.ConvertTimeToUtc(local, _timeZone);
+    }
 
     /// <summary>Provider-agnostic intermediate for the availability projection; <c>IsTaken</c> is joined in memory.</summary>
     private sealed record SlotRow(long Id, DateTime StartUtc, DateTime EndUtc, decimal Price, TimeOfDayBucket Bucket);

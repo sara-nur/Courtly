@@ -185,6 +185,10 @@ public sealed class ReservationService : IReservationService
 
     public async Task<ReservationDetailDto> ConfirmAsync(long id, CancellationToken ct = default)
     {
+        // Defense-in-depth: confirming is an admin/staff operation. The controller is role-gated, but the service must
+        // not assume it (a future endpoint, job, or test utility could call it directly) — same posture as CancelAsync.
+        EnsureStaffOrAdmin();
+
         var reservation = await LoadWithSlotAsync(id, ct);
         ReservationStateMachine.EnsureCanTransition(reservation.Status, ReservationStatus.Confirmed);
 
@@ -227,6 +231,16 @@ public sealed class ReservationService : IReservationService
                 "This reservation has been paid; cancelling it requires a refund, which is handled by the payment flow.");
         }
 
+        // A payment already in progress must settle first. Cancelling underneath an in-flight Stripe charge risks the
+        // "charged but not confirmed" hazard: the webhook could still succeed after the reservation is gone. We block
+        // here; the hold-expiry worker releases the reservation, and any late webhook is resolved by the payment flow
+        // (confirm on success, or park the payment for review if the reservation is no longer confirmable).
+        if (reservation.Payment is { Status: PaymentStatus.Pending })
+        {
+            throw new BusinessException(
+                "A payment is in progress for this reservation; wait for it to complete or the hold to expire before cancelling.");
+        }
+
         var reason = (request.Reason ?? string.Empty).Trim();
         if (string.IsNullOrEmpty(reason))
         {
@@ -252,6 +266,10 @@ public sealed class ReservationService : IReservationService
 
     public async Task<ReservationDetailDto> CompleteAsync(long id, CancellationToken ct = default)
     {
+        // Defense-in-depth: completing is an admin/staff operation (the auto-complete worker calls the dedicated
+        // ReservationAutoCompleteService, not this method). Don't rely solely on controller route authorization.
+        EnsureStaffOrAdmin();
+
         var reservation = await LoadWithSlotAsync(id, ct);
         ReservationStateMachine.EnsureCanTransition(reservation.Status, ReservationStatus.Completed);
 
@@ -457,6 +475,16 @@ public sealed class ReservationService : IReservationService
     private bool IsStaffOrAdmin() =>
         _currentUser.IsInRole(Roles.Admin) || _currentUser.IsInRole(Roles.Staff);
 
+    /// <summary>Guards a status-changing operation reserved for staff/admin, throwing 403 when the current user lacks
+    /// the role. Centralizes the check so the service — not just the controller — enforces who may confirm/complete.</summary>
+    private void EnsureStaffOrAdmin()
+    {
+        if (!IsStaffOrAdmin())
+        {
+            throw new ForbiddenException("Only staff or administrators can perform this operation.");
+        }
+    }
+
     private ReservationAudit NewAudit(ReservationStatus? oldStatus, ReservationStatus newStatus, string? reason, DateTime at) =>
         new()
         {
@@ -627,6 +655,7 @@ public sealed class ReservationService : IReservationService
         PaymentStatus.Succeeded => "Succeeded",
         PaymentStatus.Failed => "Failed",
         PaymentStatus.Refunded => "Refunded",
+        PaymentStatus.RequiresReview => "Requires review",
         _ => status.ToString(),
     };
 

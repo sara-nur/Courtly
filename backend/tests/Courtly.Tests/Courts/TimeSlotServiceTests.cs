@@ -5,9 +5,11 @@ using Courtly.Application.Courts.Slots;
 using Courtly.Contracts.Court;
 using Courtly.Domain.Entities;
 using Courtly.Domain.Enums;
+using Courtly.Infrastructure.Configuration;
 using Courtly.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using Xunit;
 
 namespace Courtly.Tests.Courts;
@@ -52,7 +54,9 @@ public class TimeSlotServiceTests
         var clock = new TestClock { UtcNow = now ?? Now };
         var maintenance = new MaintenanceService(
             db, clock, new TestCurrentUser(), NullLogger<MaintenanceService>.Instance);
-        return new TimeSlotService(db, clock, maintenance, NullLogger<TimeSlotService>.Instance);
+        // Use UTC so these arithmetic assertions stay zone-independent; local-time conversion is covered separately.
+        var localization = Options.Create(new LocalizationOptions { TimeZoneId = "UTC" });
+        return new TimeSlotService(db, clock, maintenance, localization, NullLogger<TimeSlotService>.Instance);
     }
 
     private static MaintenanceService NewMaintenance(CourtlyDbContext db) =>

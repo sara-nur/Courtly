@@ -72,7 +72,9 @@ public sealed class StripeGateway : IStripeGateway
                 payloadJson, signatureHeader, _webhookSecret, throwOnApiVersionMismatch: false);
 
             var intent = stripeEvent.Data?.Object as PaymentIntent;
-            return new StripeWebhookEvent(stripeEvent.Type, intent?.Id, intent?.AmountReceived);
+            // Currency is Stripe's lowercase ISO code (e.g. "usd"); the finalize flow compares it against the
+            // configured currency so a charge captured in the wrong currency is never treated as a clean success.
+            return new StripeWebhookEvent(stripeEvent.Type, intent?.Id, intent?.AmountReceived, intent?.Currency);
         }
         catch (StripeException ex)
         {

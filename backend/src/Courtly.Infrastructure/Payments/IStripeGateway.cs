@@ -36,9 +36,11 @@ public interface IStripeGateway
 public sealed record PaymentIntentResult(string Id, string ClientSecret);
 
 /// <summary>A verified, parsed Stripe webhook event reduced to what the finalize flow needs: the event
-/// <see cref="Type"/> (e.g. <c>payment_intent.succeeded</c>), the <see cref="PaymentIntentId"/> it concerns, and the
-/// <see cref="AmountReceivedCents"/> Stripe actually captured.</summary>
-public sealed record StripeWebhookEvent(string Type, string? PaymentIntentId, long? AmountReceivedCents);
+/// <see cref="Type"/> (e.g. <c>payment_intent.succeeded</c>), the <see cref="PaymentIntentId"/> it concerns, the
+/// <see cref="AmountReceivedCents"/> Stripe actually captured, and the <see cref="Currency"/> it was captured in
+/// (lowercase ISO code, e.g. <c>usd</c>; null when the provider payload doesn't expose it). The finalize flow
+/// compares the amount and currency against the reservation before treating the charge as a clean success.</summary>
+public sealed record StripeWebhookEvent(string Type, string? PaymentIntentId, long? AmountReceivedCents, string? Currency = null);
 
 /// <summary>A created Stripe refund: its id and status.</summary>
 public sealed record RefundResult(string Id, string Status);

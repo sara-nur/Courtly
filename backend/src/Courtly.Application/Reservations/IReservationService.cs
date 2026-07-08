@@ -34,8 +34,10 @@ public interface IReservationService
     /// cancel anyone's. A paid booking is blocked here (cancelling it needs the refund flow, feature 16).</summary>
     Task<ReservationDetailDto> CancelAsync(long id, CancelReservationRequest request, CancellationToken ct = default);
 
-    /// <summary>Confirmed → Completed, allowed only once the slot has ended (admin/staff; auto-completion via the
-    /// Worker is feature 17).</summary>
+    /// <summary>Confirmed → Completed, allowed only once the slot has ended. This is the admin/staff manual path
+    /// (it enforces the Admin/Staff role at the service level). Automatic completion runs in the Worker via
+    /// <c>ReservationAutoCompleteService</c> (a system actor), which performs the same transition on a timer for
+    /// Confirmed reservations whose slot has ended.</summary>
     Task<ReservationDetailDto> CompleteAsync(long id, CancellationToken ct = default);
 
     /// <summary>One reservation's detail (reservation + audit trail + payment). Owner or admin/staff only.</summary>
