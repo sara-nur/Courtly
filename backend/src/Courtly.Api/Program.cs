@@ -1,6 +1,6 @@
 // Courtly API host. Loads .env, binds typed options, registers the EF context + Identity + JWT auth and the
 // feature-6 cross-cutting stack (exception middleware, validation pipeline, memory cache, CORS-once,
-// current-user accessor), applies migrations + seeds on startup, and exposes the auth API behind Swagger.
+// current-user accessor), applies migrations + seeds on startup, and exposes the auth API (Swagger is dev-only).
 using System.IdentityModel.Tokens.Jwt;
 using Courtly.Api.Authorization;
 using Courtly.Api.Identity;
@@ -186,8 +186,12 @@ using (var scope = app.Services.CreateScope())
 // Exception boundary first so it wraps the whole pipeline and never leaks a stack trace (rubric §3.4).
 app.UseMiddleware<ExceptionHandlingMiddleware>();
 
-app.UseSwagger();
-app.UseSwaggerUI();
+// Only mount Swagger in Development so the Production Docker profile never exposes the API map.
+if (app.Environment.IsDevelopment())
+{
+    app.UseSwagger();
+    app.UseSwaggerUI();
+}
 
 app.UseCors(CorsPolicy);
 app.UseAuthentication();
